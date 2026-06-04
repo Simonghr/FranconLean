@@ -11,8 +11,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 const ROLLER_BASE = "https://api.roller.app"
 const SITE_ID = "00000000-0000-0000-0000-000000000001"
 
-// Revenue endpoint candidates — first invocation probes these to find the live one.
-const REVENUE_PATHS = ["/revenues", "/data/revenues", "/reports/revenues"]
+// Revenue endpoint candidates — /data/revenues is deprecated, so probe v2 variants.
+const REVENUE_PATHS = [
+  "/data/v2/revenues",
+  "/data/v2/revenue-entries",
+  "/data/revenue-entries",
+  "/v2/data/revenues",
+  "/data/v1/revenues",
+  "/reporting/revenues",
+]
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -46,7 +53,10 @@ async function probeRevenue(token: string, from: string, to: string) {
         })
         const text = await res.text()
         if (res.ok) return { url, ok: true, body: text }
-        if (res.status !== 404) return { url, ok: false, status: res.status, body: text.slice(0, 300) }
+        // 404 = wrong path, 409 = deprecated -> keep probing other candidates
+        if (res.status !== 404 && res.status !== 409) {
+          return { url, ok: false, status: res.status, body: text.slice(0, 300) }
+        }
       } catch (e) {
         return { url, ok: false, error: String(e).slice(0, 200) }
       }
