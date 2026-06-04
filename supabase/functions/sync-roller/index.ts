@@ -1,162 +1,203 @@
+// ROLLER API discovery + sync function.
+// First run: discovers the correct token + data endpoints by probing candidates.
+// Once the working URLs are known, the sync path maps revenue into the `sales` table.
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-const ROLLER_BASE_URL = "https://api.rollerpos.com"
 const SITE_ID = "00000000-0000-0000-0000-000000000001"
 
-async function getRollerToken(clientId: string, clientSecret: string): Promise<string> {
-  const res = await fetch(`${ROLLER_BASE_URL}/oauth/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "client_credentials",
-      client_id: clientId,
-      client_secret: clientSecret,
-      scope: "reporting",
-    }),
-  })
+// Candidate hostnames for the ROLLER API (DNS-resolved at runtime).
+const HOSTS = [
+  "https://api.roller.app",
+  "https://api.roller.software",
+  "https://api.rollerdigital.com",
+]
 
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Roller auth failed: ${res.status} - ${err}`)
-  }
+// Candidate OAuth2 token paths.
+const TOKEN_PATHS = ["/token", "/oauth/token", "/connect/token"]
 
-  const data = await res.json()
-  return data.access_token
+// Candidate revenue/data endpoint paths (filled in with date params later).
+const REVENUE_PATHS = [
+  "/data/revenues",
+  "/data/revenue-entries",
+  "/revenues",
+  "/v1/data/revenues",
+]
+
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
 
-async function fetchRollerRevenue(token: string, dateFrom: string, dateTo: string) {
-  const res = await fetch(
-    `${ROLLER_BASE_URL}/v2/reports/revenue?date_from=${dateFrom}&date_to=${dateTo}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+async function tryToken(host: string, path: string, clientId: string, clientSecret: string) {
+  const url = `${host}${path}`
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: clientId,
+        client_secret: clientSecret,
+      }),
+    })
+    const text = await res.text()
+    let token: string | null = null
+    try {
+      token = JSON.parse(text)?.access_token ?? null
+    } catch (_) {
+      // non-JSON response
     }
-  )
-
-  if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Roller revenue fetch failed: ${res.status} - ${err}`)
+    return { url, status: res.status, ok: res.ok, token, body: text.slice(0, 300) }
+  } catch (e) {
+    return { url, status: 0, ok: false, token: null, error: String(e).slice(0, 200) }
   }
-
-  return res.json()
 }
 
-async function fetchRollerBookings(token: string, dateFrom: string, dateTo: string) {
-  const res = await fetch(
-    `${ROLLER_BASE_URL}/v2/bookings?date_from=${dateFrom}&date_to=${dateTo}&status=completed`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+async function tryRevenue(host: string, path: string, token: string, from: string, to: string) {
+  // Try a couple of common date param namings.
+  const queries = [
+    `startDate=${from}&endDate=${to}`,
+    `dateFrom=${from}&dateTo=${to}`,
+    `date_from=${from}&date_to=${to}`,
+  ]
+  for (const q of queries) {
+    const url = `${host}${path}?${q}`
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      })
+      const text = await res.text()
+      if (res.ok) {
+        return { url, status: res.status, ok: true, sample: text.slice(0, 800) }
+      }
+      // 4xx other than 404 still tells us the host/path resolved
+      if (res.status !== 404) {
+        return { url, status: res.status, ok: false, body: text.slice(0, 300) }
+      }
+    } catch (e) {
+      return { url, status: 0, ok: false, error: String(e).slice(0, 200) }
     }
-  )
-
-  if (!res.ok) return null
-  return res.json()
+  }
+  return { url: `${host}${path}`, status: 404, ok: false }
 }
 
 Deno.serve(async (req) => {
-  // CORS
-  if (req.method === "OPTIONS") {
-    return new Response("ok", {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-      },
-    })
-  }
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors })
 
   try {
     const clientId = Deno.env.get("ROLLER_CLIENT_ID_FRAN")
     const clientSecret = Deno.env.get("ROLLER_CLIENT_SECRET_FRAN")
+    if (!clientId || !clientSecret) throw new Error("Missing Roller credentials in secrets")
 
-    if (!clientId || !clientSecret) {
-      throw new Error("Missing Roller credentials in secrets")
-    }
+    const to = new Date().toISOString().split("T")[0]
+    const from = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
 
-    // Date range: last 30 days
-    const dateTo = new Date().toISOString().split("T")[0]
-    const dateFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-      .toISOString()
-      .split("T")[0]
+    // --- Phase 1: discover a working token endpoint ---
+    const tokenAttempts = []
+    let workingToken: string | null = null
+    let workingHost: string | null = null
 
-    // 1. Authenticate with Roller
-    const token = await getRollerToken(clientId, clientSecret)
-
-    // 2. Fetch revenue data
-    const revenueData = await fetchRollerRevenue(token, dateFrom, dateTo)
-
-    // 3. Fetch bookings (optional)
-    const bookingsData = await fetchRollerBookings(token, dateFrom, dateTo)
-
-    // 4. Sync to Supabase sales table
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    )
-
-    const salesRows = []
-
-    // Map Roller revenue data to our sales table format
-    if (revenueData?.data || revenueData?.revenue || Array.isArray(revenueData)) {
-      const items = revenueData?.data || revenueData?.revenue || revenueData
-
-      for (const item of items) {
-        const date = item.date || item.business_date || item.created_at?.split("T")[0]
-        const amount = item.total || item.net_revenue || item.gross_revenue || item.amount || 0
-
-        if (date && amount) {
-          salesRows.push({
-            site_id: SITE_ID,
-            date,
-            amount: parseFloat(amount),
-            target: 10000, // default daily target €10,000
-            period: "day",
-          })
+    outer:
+    for (const host of HOSTS) {
+      for (const path of TOKEN_PATHS) {
+        const attempt = await tryToken(host, path, clientId, clientSecret)
+        tokenAttempts.push(attempt)
+        if (attempt.ok && attempt.token) {
+          workingToken = attempt.token
+          workingHost = host
+          break outer
         }
       }
     }
 
-    let syncResult = { upserted: 0, revenue_raw: revenueData }
+    if (!workingToken || !workingHost) {
+      return new Response(
+        JSON.stringify(
+          {
+            phase: "auth_discovery",
+            success: false,
+            message: "No token endpoint succeeded. See attempts for clues (DNS errors = wrong host).",
+            tokenAttempts,
+          },
+          null,
+          2
+        ),
+        { status: 200, headers: { ...cors, "Content-Type": "application/json" } }
+      )
+    }
 
-    if (salesRows.length > 0) {
-      const { error, count } = await supabase
-        .from("sales")
-        .upsert(salesRows, { onConflict: "site_id,date,period", ignoreDuplicates: false })
-        .select()
+    // --- Phase 2: discover a working revenue endpoint ---
+    const revenueAttempts = []
+    let workingRevenue: any = null
+    for (const path of REVENUE_PATHS) {
+      const attempt = await tryRevenue(workingHost, path, workingToken, from, to)
+      revenueAttempts.push(attempt)
+      if (attempt.ok) {
+        workingRevenue = attempt
+        break
+      }
+    }
 
-      if (error) throw error
-      syncResult.upserted = salesRows.length
+    // --- Phase 3: if we found revenue data, sync it into `sales` ---
+    let syncResult: any = { upserted: 0 }
+    if (workingRevenue?.sample) {
+      try {
+        const parsed = JSON.parse(workingRevenue.sample)
+        const items = parsed?.data || parsed?.items || parsed?.revenues || (Array.isArray(parsed) ? parsed : [])
+        const rows = []
+        for (const it of items) {
+          const date = it.date || it.entryDate || it.businessDate || it.startDate
+          const amount = it.fundsReceived ?? it.total ?? it.amount ?? it.revenue ?? it.netRevenue
+          if (date && amount != null) {
+            rows.push({
+              site_id: SITE_ID,
+              date: String(date).split("T")[0],
+              amount: Number(amount),
+              target: 10000,
+              period: "day",
+            })
+          }
+        }
+        if (rows.length) {
+          const supabase = createClient(
+            Deno.env.get("SUPABASE_URL")!,
+            Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+          )
+          const { error } = await supabase
+            .from("sales")
+            .upsert(rows, { onConflict: "site_id,date,period" })
+          if (error) throw error
+          syncResult = { upserted: rows.length }
+        }
+      } catch (e) {
+        syncResult = { upserted: 0, parseNote: String(e).slice(0, 200) }
+      }
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        date_range: { from: dateFrom, to: dateTo },
-        sync: syncResult,
-        bookings_available: !!bookingsData,
-        raw_sample: revenueData,
-      }),
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
+      JSON.stringify(
+        {
+          success: true,
+          discovered: {
+            host: workingHost,
+            tokenEndpoint: tokenAttempts.find((a) => a.ok)?.url,
+            revenueEndpoint: workingRevenue?.url ?? null,
+          },
+          dateRange: { from, to },
+          sync: syncResult,
+          revenueSample: workingRevenue?.sample ?? null,
+          revenueAttempts,
         },
-      }
+        null,
+        2
+      ),
+      { headers: { ...cors, "Content-Type": "application/json" } }
     )
   } catch (error) {
-    return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
-      }
-    )
+    return new Response(JSON.stringify({ success: false, error: String(error) }), {
+      status: 500,
+      headers: { ...cors, "Content-Type": "application/json" },
+    })
   }
 })
