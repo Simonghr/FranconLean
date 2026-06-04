@@ -10,7 +10,8 @@
 //   endDate is exclusive (docs: "should be +1 day from the startDate").
 //   Each entry has: recordDate, entryType (Transaction|Recognition|Adjustment), fundsReceived, netRevenue, ...
 //
-// CA (chiffre d'affaires) = sum of `fundsReceived` for entryType === "Transaction", grouped by recordDate (day).
+// CA HT (chiffre d'affaires hors taxes) = sum of `netRevenue` for entryType === "Transaction",
+// grouped by recordDate (day). netRevenue is the after-tax (ex-VAT) revenue per entry.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -93,14 +94,14 @@ Deno.serve(async (req) => {
     // 2. Fetch + paginate revenue entries
     const entries = await fetchRevenueEntries(token, startDate, endDate)
 
-    // 3. Aggregate CA per day: funds received on Transaction entries
+    // 3. Aggregate CA HT per day: net (ex-tax) revenue on Transaction entries
     const byDay = new Map<string, number>()
     for (const e of entries) {
       if (e?.entryType !== "Transaction") continue
       const day = String(e.recordDate ?? e.transactionDate ?? "").split("T")[0]
-      const funds = Number(e.fundsReceived ?? 0)
-      if (!day || Number.isNaN(funds)) continue
-      byDay.set(day, (byDay.get(day) ?? 0) + funds)
+      const net = Number(e.netRevenue ?? 0)
+      if (!day || Number.isNaN(net)) continue
+      byDay.set(day, (byDay.get(day) ?? 0) + net)
     }
 
     const rows = [...byDay.entries()]
