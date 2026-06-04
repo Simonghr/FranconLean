@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Plus, AlertTriangle, MessageSquare } from "lucide-react"
 import { BriefingHeader } from "@/components/dashboard/BriefingHeader"
 import { KPICard } from "@/components/dashboard/KPICard"
@@ -16,23 +16,26 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  mockSite, mockBriefing, mockSales, mockIncidents, mockFeedback, mockInsights
-} from "@/lib/mockData"
+import { mockBriefing } from "@/lib/mockData"
+import * as incidentsRepo from "@/lib/repositories/incidents"
+import * as salesRepo from "@/lib/repositories/sales"
+import * as feedbackRepo from "@/lib/repositories/feedback"
+import * as kaizenRepo from "@/lib/repositories/kaizen"
+import { generateInsights } from "@/lib/services/insightsService"
+import { seedDatabase } from "@/lib/seed"
+import type { Incident, Sale, CustomerFeedback, Insight, IncidentCategory, IncidentImpact } from "@/lib/types"
 
-const todaySale = mockSales[mockSales.length - 1]
-const caToday = Math.round(todaySale?.amount ?? 0)
-const caTarget = Math.round(todaySale?.target ?? 0)
-const caTrend = caTarget > 0 ? Math.round(((caToday - caTarget) / caTarget) * 100) : 0
+const SITE_ID = '00000000-0000-0000-0000-000000000001'
 
-const openIncidents = mockIncidents.filter(i => i.status === "open" || i.status === "in_progress")
-const weekFeedback = mockFeedback.filter(f => {
-  const d = new Date(f.created_at)
-  const now = new Date()
-  return (now.getTime() - d.getTime()) < 7 * 24 * 3600 * 1000
-})
+const mockSite = { id: SITE_ID, name: 'Franconville', address: '12 Rue du Commerce, 95130 Franconville', manager_name: 'Simon Gohier' }
 
 export default function DashboardPage() {
+  const [incidents, setIncidents] = useState<Incident[]>([])
+  const [sales, setSales] = useState<Sale[]>([])
+  const [feedback, setFeedback] = useState<CustomerFeedback[]>([])
+  const [insights, setInsights] = useState<Insight[]>([])
+  const [loading, setLoading] = useState(true)
+
   const [incidentOpen, setIncidentOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [incidentForm, setIncidentForm] = useState({
@@ -41,6 +44,78 @@ export default function DashboardPage() {
   const [feedbackForm, setFeedbackForm] = useState({
     description: "", category: "compliment", sentiment: "positive"
   })
+
+  useEffect(() => {
+    async function load() {
+      try {
+        await seedDatabase()
+        const [inc, sal, fb, kz] = await Promise.all([
+          incidentsRepo.getAll(SITE_ID),
+          salesRepo.getAll(SITE_ID),
+          feedbackRepo.getAll(SITE_ID),
+          kaizenRepo.getAll(SITE_ID),
+        ])
+        setIncidents(inc)
+        setSales(sal)
+        setFeedback(fb)
+        setInsights(generateInsights(inc, sal, fb, kz, SITE_ID))
+      } catch (err) {
+        console.error('Failed to load dashboard data', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  const todaySale = sales[sales.length - 1]
+  const caToday = Math.round(todaySale?.amount ?? 0)
+  const caTarget = Math.round(todaySale?.target ?? 0)
+  const caTrend = caTarget > 0 ? Math.round(((caToday - caTarget) / caTarget) * 100) : 0
+
+  const openIncidents = incidents.filter(i => i.status === "open" || i.status === "in_progress")
+  const weekFeedback = feedback.filter(f => {
+    const d = new Date(f.created_at)
+    const now = new Date()
+    return (now.getTime() - d.getTime()) < 7 * 24 * 3600 * 1000
+  })
+
+  const handleAddIncident = async () => {
+    if (!incidentForm.description || !incidentForm.owner) return
+    try {
+      const newInc = await incidentsRepo.create({
+        site_id: SITE_ID,
+        description: incidentForm.description,
+        category: incidentForm.category as IncidentCategory,
+        impact: incidentForm.impact as IncidentImpact,
+        owner: incidentForm.owner,
+        status: 'open',
+      })
+      setIncidents(prev => [newInc, ...prev])
+      setIncidentForm({ description: "", category: "process", impact: "medium", owner: "" })
+      setIncidentOpen(false)
+    } catch (err) {
+      console.error('Failed to create incident', err)
+    }
+  }
+
+  const handleAddFeedback = async () => {
+    if (!feedbackForm.description) return
+    try {
+      const newFb = await feedbackRepo.create({
+        site_id: SITE_ID,
+        type: ["compliment", "positive_experience"].includes(feedbackForm.category) ? "satisfaction" : "complaint",
+        category: feedbackForm.category as CustomerFeedback["category"],
+        description: feedbackForm.description,
+        sentiment: feedbackForm.sentiment as CustomerFeedback["sentiment"],
+      })
+      setFeedback(prev => [newFb, ...prev])
+      setFeedbackForm({ description: "", category: "compliment", sentiment: "positive" })
+      setFeedbackOpen(false)
+    } catch (err) {
+      console.error('Failed to create feedback', err)
+    }
+  }
 
   return (
     <div className="space-y-6 max-w-[1400px]">
@@ -51,7 +126,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <KPICard
           title="CA Aujourd'hui"
-          value={`${caToday.toLocaleString("fr-FR")} €`}
+          value={loading ? "…" : `${caToday.toLocaleString("fr-FR")} €`}
           subtitle={`Objectif : ${caTarget.toLocaleString("fr-FR")} €`}
           trend={caTrend}
           trendLabel="vs objectif"
@@ -59,8 +134,8 @@ export default function DashboardPage() {
         />
         <KPICard
           title="Incidents Ouverts"
-          value={openIncidents.length}
-          subtitle={`${mockIncidents.length} total ce mois`}
+          value={loading ? "…" : openIncidents.length}
+          subtitle={`${incidents.length} total ce mois`}
           trend={-15}
           trendLabel="vs mois dernier"
           status={openIncidents.length <= 2 ? "good" : openIncidents.length <= 4 ? "warning" : "critical"}
@@ -68,7 +143,7 @@ export default function DashboardPage() {
         />
         <KPICard
           title="Retours Clients"
-          value={weekFeedback.length}
+          value={loading ? "…" : weekFeedback.length}
           subtitle="Cette semaine"
           trend={12}
           trendLabel="vs semaine passée"
@@ -83,20 +158,20 @@ export default function DashboardPage() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-1">
-          <CAChart sales={mockSales} title="CA 14 derniers jours" />
+          <CAChart sales={sales} title="CA 14 derniers jours" />
         </div>
         <div>
-          <IncidentsChart incidents={mockIncidents} title="Incidents par catégorie" />
+          <IncidentsChart incidents={incidents} title="Incidents par catégorie" />
         </div>
         <div>
-          <FeedbackChart feedback={mockFeedback} title="Sentiment clients" />
+          <FeedbackChart feedback={feedback} title="Sentiment clients" />
         </div>
       </div>
 
       {/* Bottom row: insights + quick actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2">
-          <InsightsPanel insights={mockInsights} />
+          <InsightsPanel insights={insights} />
         </div>
 
         {/* Quick actions */}
@@ -206,7 +281,9 @@ export default function DashboardPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIncidentOpen(false)}>Annuler</Button>
-            <Button onClick={() => setIncidentOpen(false)}>Déclarer</Button>
+            <Button onClick={handleAddIncident} disabled={!incidentForm.description || !incidentForm.owner}>
+              Déclarer
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -256,7 +333,7 @@ export default function DashboardPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFeedbackOpen(false)}>Annuler</Button>
-            <Button onClick={() => setFeedbackOpen(false)}>Enregistrer</Button>
+            <Button onClick={handleAddFeedback} disabled={!feedbackForm.description}>Enregistrer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

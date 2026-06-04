@@ -1,16 +1,17 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Plus } from "lucide-react"
-import { mockPDCA } from "@/lib/mockData"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import * as pdcaRepo from "@/lib/repositories/pdca"
 import type { PDCA, PDCAStatus } from "@/lib/types"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
+
+const SITE_ID = '00000000-0000-0000-0000-000000000001'
 
 const statusConfig: Record<PDCAStatus, { label: string; color: string; bg: string; border: string }> = {
   plan: { label: "PLAN", color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/30" },
@@ -19,8 +20,16 @@ const statusConfig: Record<PDCAStatus, { label: string; color: string; bg: strin
   act: { label: "ACT", color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/30" },
 }
 
-function PDCACard({ pdca }: { pdca: PDCA }) {
+const nextStatus: Record<PDCAStatus, PDCAStatus | null> = {
+  plan: "do",
+  do: "check",
+  check: "act",
+  act: null,
+}
+
+function PDCACard({ pdca, onAdvance }: { pdca: PDCA; onAdvance: (pdca: PDCA) => void }) {
   const cfg = statusConfig[pdca.status]
+  const next = nextStatus[pdca.status]
   return (
     <div className={`bg-slate-800 border ${cfg.border} rounded-xl p-4`}>
       <div className="flex items-start justify-between mb-3">
@@ -57,30 +66,59 @@ function PDCACard({ pdca }: { pdca: PDCA }) {
           </div>
         )}
       </div>
+      {next && (
+        <div className="mt-3 pt-3 border-t border-slate-700/50">
+          <Button size="sm" variant="ghost" className="text-xs h-7 px-2 w-full" onClick={() => onAdvance(pdca)}>
+            Avancer vers {statusConfig[next].label}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
 
 export default function PDCAPage() {
-  const [pdcas, setPdcas] = useState<PDCA[]>(mockPDCA)
+  const [pdcas, setPdcas] = useState<PDCA[]>([])
+  const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState({ problem: "", objective: "", action: "" })
 
-  const handleAdd = () => {
-    const newPDCA: PDCA = {
-      id: `pdca-${Date.now()}`,
-      site_id: "site-franconville",
-      problem: form.problem,
-      objective: form.objective,
-      action: form.action,
-      result: "",
-      standardization: "",
-      status: "plan",
-      created_at: new Date().toISOString(),
+  useEffect(() => {
+    pdcaRepo.getAll(SITE_ID)
+      .then(setPdcas)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
+
+  const handleAdd = async () => {
+    if (!form.problem || !form.objective || !form.action) return
+    try {
+      const newPDCA = await pdcaRepo.create({
+        site_id: SITE_ID,
+        problem: form.problem,
+        objective: form.objective,
+        action: form.action,
+        result: "",
+        standardization: "",
+        status: "plan",
+      })
+      setPdcas(prev => [newPDCA, ...prev])
+      setForm({ problem: "", objective: "", action: "" })
+      setDialogOpen(false)
+    } catch (err) {
+      console.error('Failed to create PDCA', err)
     }
-    setPdcas(prev => [newPDCA, ...prev])
-    setForm({ problem: "", objective: "", action: "" })
-    setDialogOpen(false)
+  }
+
+  const handleAdvance = async (pdca: PDCA) => {
+    const next = nextStatus[pdca.status]
+    if (!next) return
+    try {
+      const updated = await pdcaRepo.update(pdca.id, { status: next })
+      setPdcas(prev => prev.map(p => p.id === updated.id ? updated : p))
+    } catch (err) {
+      console.error('Failed to update PDCA', err)
+    }
   }
 
   const columns: PDCAStatus[] = ["plan", "do", "check", "act"]
@@ -98,31 +136,35 @@ export default function PDCAPage() {
         </Button>
       </div>
 
-      {/* Kanban board */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {columns.map(status => {
-          const cfg = statusConfig[status]
-          const items = pdcas.filter(p => p.status === status)
-          return (
-            <div key={status}>
-              <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${cfg.bg} border ${cfg.border} mb-3`}>
-                <span className={`font-bold text-sm ${cfg.color}`}>{cfg.label}</span>
-                <span className="ml-auto text-xs text-slate-500">{items.length}</span>
+      {loading ? (
+        <div className="text-center text-slate-500 py-12">Chargement…</div>
+      ) : (
+        /* Kanban board */
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          {columns.map(status => {
+            const cfg = statusConfig[status]
+            const items = pdcas.filter(p => p.status === status)
+            return (
+              <div key={status}>
+                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${cfg.bg} border ${cfg.border} mb-3`}>
+                  <span className={`font-bold text-sm ${cfg.color}`}>{cfg.label}</span>
+                  <span className="ml-auto text-xs text-slate-500">{items.length}</span>
+                </div>
+                <div className="space-y-3">
+                  {items.map(pdca => (
+                    <PDCACard key={pdca.id} pdca={pdca} onAdvance={handleAdvance} />
+                  ))}
+                  {items.length === 0 && (
+                    <div className="text-center py-8 text-slate-600 text-sm">
+                      Aucun PDCA
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="space-y-3">
-                {items.map(pdca => (
-                  <PDCACard key={pdca.id} pdca={pdca} />
-                ))}
-                {items.length === 0 && (
-                  <div className="text-center py-8 text-slate-600 text-sm">
-                    Aucun PDCA
-                  </div>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

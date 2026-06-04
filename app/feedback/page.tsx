@@ -1,9 +1,8 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Plus, Search, ThumbsUp, ThumbsDown, Minus } from "lucide-react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
-import { mockFeedback } from "@/lib/mockData"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,7 +11,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { FeedbackChart } from "@/components/charts/FeedbackChart"
+import * as feedbackRepo from "@/lib/repositories/feedback"
 import type { CustomerFeedback, FeedbackCategory, FeedbackSentiment } from "@/lib/types"
+
+const SITE_ID = '00000000-0000-0000-0000-000000000001'
 
 const categoryLabels: Record<FeedbackCategory, string> = {
   compliment: "Compliment",
@@ -42,7 +44,8 @@ const sentimentLabels: Record<FeedbackSentiment, string> = {
 }
 
 export default function FeedbackPage() {
-  const [feedbacks, setFeedbacks] = useState<CustomerFeedback[]>(mockFeedback)
+  const [feedbacks, setFeedbacks] = useState<CustomerFeedback[]>([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [filterSentiment, setFilterSentiment] = useState("all")
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -50,25 +53,35 @@ export default function FeedbackPage() {
     description: "", category: "compliment", sentiment: "positive",
   })
 
+  useEffect(() => {
+    feedbackRepo.getAll(SITE_ID)
+      .then(setFeedbacks)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
+
   const filtered = feedbacks.filter(f => {
     const matchSearch = f.description.toLowerCase().includes(search.toLowerCase())
     const matchSentiment = filterSentiment === "all" || f.sentiment === filterSentiment
     return matchSearch && matchSentiment
   })
 
-  const handleAdd = () => {
-    const newFb: CustomerFeedback = {
-      id: `fb-${Date.now()}`,
-      site_id: "site-franconville",
-      type: ["compliment", "positive_experience"].includes(form.category) ? "satisfaction" : "complaint",
-      category: form.category as FeedbackCategory,
-      description: form.description,
-      sentiment: form.sentiment as FeedbackSentiment,
-      created_at: new Date().toISOString(),
+  const handleAdd = async () => {
+    if (!form.description) return
+    try {
+      const newFb = await feedbackRepo.create({
+        site_id: SITE_ID,
+        type: ["compliment", "positive_experience"].includes(form.category) ? "satisfaction" : "complaint",
+        category: form.category as FeedbackCategory,
+        description: form.description,
+        sentiment: form.sentiment as FeedbackSentiment,
+      })
+      setFeedbacks(prev => [newFb, ...prev])
+      setForm({ description: "", category: "compliment", sentiment: "positive" })
+      setDialogOpen(false)
+    } catch (err) {
+      console.error('Failed to create feedback', err)
     }
-    setFeedbacks(prev => [newFb, ...prev])
-    setForm({ description: "", category: "compliment", sentiment: "positive" })
-    setDialogOpen(false)
   }
 
   const positiveCount = feedbacks.filter(f => f.sentiment === "positive").length
@@ -132,25 +145,29 @@ export default function FeedbackPage() {
       </div>
 
       {/* Cards grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map(fb => (
-          <div key={fb.id} className="bg-slate-800 border border-slate-700 rounded-xl p-4">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex items-center gap-2">
-                {sentimentIcon[fb.sentiment]}
-                <Badge variant={sentimentVariants[fb.sentiment]}>{sentimentLabels[fb.sentiment]}</Badge>
+      {loading ? (
+        <div className="text-center text-slate-500 py-12">Chargement…</div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map(fb => (
+            <div key={fb.id} className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  {sentimentIcon[fb.sentiment]}
+                  <Badge variant={sentimentVariants[fb.sentiment]}>{sentimentLabels[fb.sentiment]}</Badge>
+                </div>
+                <span className="text-xs text-slate-500">
+                  {format(new Date(fb.created_at), "dd/MM", { locale: fr })}
+                </span>
               </div>
-              <span className="text-xs text-slate-500">
-                {format(new Date(fb.created_at), "dd/MM", { locale: fr })}
-              </span>
+              <p className="text-sm text-slate-200 leading-relaxed mb-3">"{fb.description}"</p>
+              <div className="flex items-center gap-2">
+                <Badge variant="default" className="text-xs">{categoryLabels[fb.category]}</Badge>
+              </div>
             </div>
-            <p className="text-sm text-slate-200 leading-relaxed mb-3">"{fb.description}"</p>
-            <div className="flex items-center gap-2">
-              <Badge variant="default" className="text-xs">{categoryLabels[fb.category]}</Badge>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Add Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

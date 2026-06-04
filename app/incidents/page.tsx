@@ -1,9 +1,8 @@
 "use client"
-import { useState } from "react"
-import { Plus, Filter, Search, AlertTriangle } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Plus, Search, AlertTriangle } from "lucide-react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
-import { mockIncidents } from "@/lib/mockData"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,7 +10,10 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import * as incidentsRepo from "@/lib/repositories/incidents"
 import type { Incident, IncidentStatus, IncidentCategory, IncidentImpact } from "@/lib/types"
+
+const SITE_ID = '00000000-0000-0000-0000-000000000001'
 
 const statusLabels: Record<IncidentStatus, string> = {
   open: "Ouvert",
@@ -49,8 +51,23 @@ const impactLabels: Record<IncidentImpact, string> = {
   high: "Élevé",
 }
 
+const nextStatus: Record<IncidentStatus, IncidentStatus | null> = {
+  open: "in_progress",
+  in_progress: "resolved",
+  resolved: "standardized",
+  standardized: null,
+}
+
+const nextStatusLabel: Record<IncidentStatus, string | null> = {
+  open: "Prendre en charge",
+  in_progress: "Marquer résolu",
+  resolved: "Standardiser",
+  standardized: null,
+}
+
 export default function IncidentsPage() {
-  const [incidents, setIncidents] = useState<Incident[]>(mockIncidents)
+  const [incidents, setIncidents] = useState<Incident[]>([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [filterCategory, setFilterCategory] = useState<string>("all")
@@ -58,6 +75,13 @@ export default function IncidentsPage() {
   const [form, setForm] = useState({
     description: "", category: "process", impact: "medium", owner: ""
   })
+
+  useEffect(() => {
+    incidentsRepo.getAll(SITE_ID)
+      .then(setIncidents)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
 
   const filtered = incidents.filter(inc => {
     const matchSearch = inc.description.toLowerCase().includes(search.toLowerCase()) ||
@@ -67,20 +91,37 @@ export default function IncidentsPage() {
     return matchSearch && matchStatus && matchCat
   })
 
-  const handleAdd = () => {
-    const newInc: Incident = {
-      id: `inc-${Date.now()}`,
-      site_id: "site-franconville",
-      description: form.description,
-      category: form.category as IncidentCategory,
-      impact: form.impact as IncidentImpact,
-      owner: form.owner,
-      status: "open",
-      created_at: new Date().toISOString(),
+  const handleAdd = async () => {
+    if (!form.description || !form.owner) return
+    try {
+      const newInc = await incidentsRepo.create({
+        site_id: SITE_ID,
+        description: form.description,
+        category: form.category as IncidentCategory,
+        impact: form.impact as IncidentImpact,
+        owner: form.owner,
+        status: "open",
+      })
+      setIncidents(prev => [newInc, ...prev])
+      setForm({ description: "", category: "process", impact: "medium", owner: "" })
+      setDialogOpen(false)
+    } catch (err) {
+      console.error('Failed to create incident', err)
     }
-    setIncidents(prev => [newInc, ...prev])
-    setForm({ description: "", category: "process", impact: "medium", owner: "" })
-    setDialogOpen(false)
+  }
+
+  const handleStatusUpdate = async (inc: Incident) => {
+    const next = nextStatus[inc.status]
+    if (!next) return
+    try {
+      const updated = await incidentsRepo.update(inc.id, {
+        status: next,
+        ...(next === "resolved" || next === "standardized" ? { resolved_at: new Date().toISOString() } : {}),
+      })
+      setIncidents(prev => prev.map(i => i.id === updated.id ? updated : i))
+    } catch (err) {
+      console.error('Failed to update incident', err)
+    }
   }
 
   const counts = {
@@ -169,12 +210,19 @@ export default function IncidentsPage() {
                 <th className="text-left px-5 py-3 text-xs text-slate-400 font-semibold uppercase tracking-widest">Responsable</th>
                 <th className="text-left px-5 py-3 text-xs text-slate-400 font-semibold uppercase tracking-widest">Statut</th>
                 <th className="text-left px-5 py-3 text-xs text-slate-400 font-semibold uppercase tracking-widest">Date</th>
+                <th className="text-left px-5 py-3 text-xs text-slate-400 font-semibold uppercase tracking-widest">Action</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.length === 0 ? (
+              {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center text-slate-500">
+                  <td colSpan={7} className="px-5 py-12 text-center text-slate-500">
+                    Chargement…
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-5 py-12 text-center text-slate-500">
                     <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-50" />
                     Aucun incident trouvé
                   </td>
@@ -200,6 +248,18 @@ export default function IncidentsPage() {
                     </td>
                     <td className="px-5 py-3 text-slate-400 text-xs">
                       {format(new Date(inc.created_at), "dd/MM/yyyy", { locale: fr })}
+                    </td>
+                    <td className="px-5 py-3">
+                      {nextStatus[inc.status] && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-xs h-7 px-2"
+                          onClick={() => handleStatusUpdate(inc)}
+                        >
+                          {nextStatusLabel[inc.status]}
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))

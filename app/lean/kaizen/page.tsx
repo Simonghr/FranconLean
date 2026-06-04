@@ -1,16 +1,18 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Plus, Lightbulb, TrendingUp } from "lucide-react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
-import { mockKaizen } from "@/lib/mockData"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import * as kaizenRepo from "@/lib/repositories/kaizen"
 import type { Kaizen, KaizenStatus } from "@/lib/types"
+
+const SITE_ID = '00000000-0000-0000-0000-000000000001'
 
 const statusConfig: Record<KaizenStatus, { label: string; variant: "default" | "warning" | "success" | "destructive" | "info" }> = {
   idea: { label: "Idée", variant: "info" },
@@ -54,23 +56,34 @@ function KaizenCard({ kaizen }: { kaizen: Kaizen }) {
 }
 
 export default function KaizenPage() {
-  const [kaizenList, setKaizenList] = useState<Kaizen[]>(mockKaizen)
+  const [kaizenList, setKaizenList] = useState<Kaizen[]>([])
+  const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState({ description: "", estimated_gain: "", author: "" })
 
-  const handleAdd = () => {
-    const newK: Kaizen = {
-      id: `kz-${Date.now()}`,
-      site_id: "site-franconville",
-      author: form.author,
-      description: form.description,
-      estimated_gain: parseFloat(form.estimated_gain) || 0,
-      status: "idea",
-      created_at: new Date().toISOString(),
+  useEffect(() => {
+    kaizenRepo.getAll(SITE_ID)
+      .then(setKaizenList)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
+
+  const handleAdd = async () => {
+    if (!form.description || !form.author) return
+    try {
+      const newK = await kaizenRepo.create({
+        site_id: SITE_ID,
+        author: form.author,
+        description: form.description,
+        estimated_gain: parseFloat(form.estimated_gain) || 0,
+        status: "idea",
+      })
+      setKaizenList(prev => [newK, ...prev])
+      setForm({ description: "", estimated_gain: "", author: "" })
+      setDialogOpen(false)
+    } catch (err) {
+      console.error('Failed to create kaizen', err)
     }
-    setKaizenList(prev => [newK, ...prev])
-    setForm({ description: "", estimated_gain: "", author: "" })
-    setDialogOpen(false)
   }
 
   const columns: KaizenStatus[] = ["idea", "in_progress", "implemented", "rejected"]
@@ -121,27 +134,31 @@ export default function KaizenPage() {
         </div>
       </div>
 
-      {/* Kanban columns */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        {columns.map(status => {
-          const cfg = statusConfig[status]
-          const items = kaizenList.filter(k => k.status === status)
-          return (
-            <div key={status}>
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 mb-3">
-                <Badge variant={cfg.variant}>{cfg.label}</Badge>
-                <span className="ml-auto text-xs text-slate-500">{items.length}</span>
+      {loading ? (
+        <div className="text-center text-slate-500 py-12">Chargement…</div>
+      ) : (
+        /* Kanban columns */
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          {columns.map(status => {
+            const cfg = statusConfig[status]
+            const items = kaizenList.filter(k => k.status === status)
+            return (
+              <div key={status}>
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 mb-3">
+                  <Badge variant={cfg.variant}>{cfg.label}</Badge>
+                  <span className="ml-auto text-xs text-slate-500">{items.length}</span>
+                </div>
+                <div className="space-y-3">
+                  {items.map(k => <KaizenCard key={k.id} kaizen={k} />)}
+                  {items.length === 0 && (
+                    <div className="text-center py-8 text-slate-600 text-sm">Aucune idée</div>
+                  )}
+                </div>
               </div>
-              <div className="space-y-3">
-                {items.map(k => <KaizenCard key={k.id} kaizen={k} />)}
-                {items.length === 0 && (
-                  <div className="text-center py-8 text-slate-600 text-sm">Aucune idée</div>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
