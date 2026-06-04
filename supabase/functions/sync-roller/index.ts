@@ -7,20 +7,25 @@
 // Revenue (confirmed from docs):
 //   GET https://api.roller.app/reporting/revenue-entries?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&pageNumber=N
 //   Header: Authorization: Bearer <token>, Accept: application/json
-//   endDate is exclusive (docs: "should be +1 day from the startDate").
-//   Each entry has: recordDate, entryType (Transaction|Recognition|Adjustment), fundsReceived, netRevenue, ...
+//   IMPORTANT: the range is capped at 1 day -> endDate must be startDate + 1 (exclusive).
+//   So we loop day-by-day. ROLLER rate limit is ~1 request/second per credentials.
 //
 // CA HT (chiffre d'affaires hors taxes) = sum of `netRevenue` for entryType === "Transaction",
-// grouped by recordDate (day). netRevenue is the after-tax (ex-VAT) revenue per entry.
+// grouped per day. netRevenue is the after-tax (ex-VAT) revenue per entry.
+//
+// Optional POST body to control the window:
+//   { "days": 30 }                              -> last 30 days
+//   { "startDate": "2026-05-01", "endDate": "2026-05-31" }  -> explicit range (inclusive)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const ROLLER_BASE = "https://api.roller.app"
 const SITE_ID = "00000000-0000-0000-0000-000000000001"
-const DAYS_BACK = 30
+const DEFAULT_DAYS = 7
 const DAILY_TARGET = 10000
-const MAX_PAGES = 20
-const RATE_LIMIT_MS = 1100 // ROLLER allows ~1 request/second per credentials
+const MAX_PAGES_PER_DAY = 10
+const RATE_LIMIT_MS = 1050 // ROLLER allows ~1 request/second per credentials
+const DAY_MS = 86400_000
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -55,22 +60,33 @@ function extractEntries(parsed: unknown): any[] {
   return []
 }
 
-async function fetchRevenueEntries(token: string, startDate: string, endDate: string) {
-  const all: any[] = []
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    const url = `${ROLLER_BASE}/reporting/revenue-entries?startDate=${startDate}&endDate=${endDate}&pageNumber=${page}`
+// GET one page, retrying once on 429 (rate limited).
+async function getPage(token: string, dayStart: string, dayEnd: string, page: number) {
+  const url = `${ROLLER_BASE}/reporting/revenue-entries?startDate=${dayStart}&endDate=${dayEnd}&pageNumber=${page}`
+  for (let attempt = 0; attempt < 2; attempt++) {
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
     })
-    const text = await res.text()
-    if (!res.ok) {
-      if (page === 1) throw new Error(`Revenue fetch failed: ${res.status} - ${text.slice(0, 300)}`)
-      break // a later page failed; keep what we have
+    if (res.status === 429) {
+      await sleep(2000)
+      continue
     }
-    const entries = extractEntries(JSON.parse(text))
-    all.push(...entries)
-    if (entries.length === 0) break // no more pages
+    const text = await res.text()
+    if (!res.ok) throw new Error(`${dayStart}: ${res.status} - ${text.slice(0, 200)}`)
+    return extractEntries(JSON.parse(text))
+  }
+  throw new Error(`${dayStart}: rate limited (429) after retry`)
+}
+
+// Fetch one day's entries (handles pagination within the day).
+async function fetchDay(token: string, dayStart: string) {
+  const dayEnd = ymd(new Date(new Date(dayStart).getTime() + DAY_MS))
+  const all: any[] = []
+  for (let page = 1; page <= MAX_PAGES_PER_DAY; page++) {
     await sleep(RATE_LIMIT_MS)
+    const entries = await getPage(token, dayStart, dayEnd, page)
+    all.push(...entries)
+    if (entries.length === 0) break
   }
   return all
 }
@@ -83,25 +99,53 @@ Deno.serve(async (req) => {
     const clientSecret = Deno.env.get("ROLLER_CLIENT_SECRET_FRAN")
     if (!clientId || !clientSecret) throw new Error("Missing Roller credentials in secrets")
 
+    // Parse optional body (ignore the dashboard's default {"name":"Functions"}).
+    let body: any = {}
+    try {
+      body = await req.json()
+    } catch (_) {
+      // no/invalid body -> defaults
+    }
+
     const today = new Date()
-    const start = new Date(today.getTime() - DAYS_BACK * 86400_000)
-    const startDate = ymd(start)
-    const endDate = ymd(new Date(today.getTime() + 86400_000)) // exclusive end = tomorrow
+    let firstDay: Date
+    let lastDay: Date // inclusive
+    if (body?.startDate && body?.endDate) {
+      firstDay = new Date(body.startDate)
+      lastDay = new Date(body.endDate)
+    } else {
+      const days = Number(body?.days) > 0 ? Math.min(Number(body.days), 92) : DEFAULT_DAYS
+      lastDay = today
+      firstDay = new Date(today.getTime() - (days - 1) * DAY_MS)
+    }
+
+    const startDate = ymd(firstDay)
+    const lastDateStr = ymd(lastDay)
 
     // 1. Auth
     const token = await getToken(clientId, clientSecret)
 
-    // 2. Fetch + paginate revenue entries
-    const entries = await fetchRevenueEntries(token, startDate, endDate)
-
-    // 3. Aggregate CA HT per day: net (ex-tax) revenue on Transaction entries
+    // 2. Loop day-by-day (API max range = 1 day)
     const byDay = new Map<string, number>()
-    for (const e of entries) {
-      if (e?.entryType !== "Transaction") continue
-      const day = String(e.recordDate ?? e.transactionDate ?? "").split("T")[0]
-      const net = Number(e.netRevenue ?? 0)
-      if (!day || Number.isNaN(net)) continue
-      byDay.set(day, (byDay.get(day) ?? 0) + net)
+    const errors: string[] = []
+    let entriesReceived = 0
+
+    for (let cur = new Date(firstDay); ymd(cur) <= lastDateStr; cur = new Date(cur.getTime() + DAY_MS)) {
+      const dayStr = ymd(cur)
+      try {
+        const entries = await fetchDay(token, dayStr)
+        entriesReceived += entries.length
+        for (const e of entries) {
+          if (e?.entryType !== "Transaction") continue
+          const d = String(e.recordDate ?? e.transactionDate ?? dayStr).split("T")[0]
+          const net = Number(e.netRevenue ?? 0)
+          if (Number.isNaN(net)) continue
+          byDay.set(d, (byDay.get(d) ?? 0) + net)
+        }
+        if (!byDay.has(dayStr)) byDay.set(dayStr, byDay.get(dayStr) ?? 0) // keep 0-CA days
+      } catch (e) {
+        errors.push(String(e).slice(0, 200))
+      }
     }
 
     const rows = [...byDay.entries()]
@@ -114,7 +158,7 @@ Deno.serve(async (req) => {
       }))
       .sort((a, b) => a.date.localeCompare(b.date))
 
-    // 4. Replace the synced window in `sales` (delete + insert, no unique constraint needed)
+    // 3. Replace the synced window in `sales` (delete + insert)
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -128,7 +172,7 @@ Deno.serve(async (req) => {
         .eq("site_id", SITE_ID)
         .eq("period", "day")
         .gte("date", startDate)
-        .lte("date", ymd(today))
+        .lte("date", lastDateStr)
       if (delErr) throw delErr
 
       const { error: insErr } = await supabase.from("sales").insert(rows)
@@ -140,11 +184,12 @@ Deno.serve(async (req) => {
       JSON.stringify(
         {
           success: true,
-          dateRange: { startDate, endDate },
-          entriesReceived: entries.length,
+          dateRange: { startDate, endDate: lastDateStr },
+          entriesReceived,
           daysSynced: synced,
           totalCA: Math.round(rows.reduce((s, r) => s + r.amount, 0) * 100) / 100,
           days: rows,
+          errors: errors.length ? errors : undefined,
         },
         null,
         2
