@@ -1,30 +1,33 @@
-// ROLLER Data API sync.
-// Auth confirmed from ROLLER docs:
-//   POST https://api.roller.app/token
-//   Content-Type: application/json
-//   Body: {"client_id": "...", "client_secret": "..."}
-//   -> { access_token, token_type: "Bearer", expires_in }
-// Requests: Authorization: Bearer <token>, Accept: application/json
+// ROLLER -> FranconLean revenue sync.
+//
+// Auth (confirmed from docs):
+//   POST https://api.roller.app/token  | Content-Type: application/json
+//   body {"client_id","client_secret"} -> { access_token, token_type:"Bearer", expires_in }
+//
+// Revenue (confirmed from docs):
+//   GET https://api.roller.app/reporting/revenue-entries?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&pageNumber=N
+//   Header: Authorization: Bearer <token>, Accept: application/json
+//   endDate is exclusive (docs: "should be +1 day from the startDate").
+//   Each entry has: recordDate, entryType (Transaction|Recognition|Adjustment), fundsReceived, netRevenue, ...
+//
+// CA (chiffre d'affaires) = sum of `fundsReceived` for entryType === "Transaction", grouped by recordDate (day).
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
 const ROLLER_BASE = "https://api.roller.app"
 const SITE_ID = "00000000-0000-0000-0000-000000000001"
-
-// Revenue endpoint candidates — /data/revenues is deprecated, so probe v2 variants.
-const REVENUE_PATHS = [
-  "/data/v2/revenues",
-  "/data/v2/revenue-entries",
-  "/data/revenue-entries",
-  "/v2/data/revenues",
-  "/data/v1/revenues",
-  "/reporting/revenues",
-]
+const DAYS_BACK = 30
+const DAILY_TARGET = 10000
+const MAX_PAGES = 20
+const RATE_LIMIT_MS = 1100 // ROLLER allows ~1 request/second per credentials
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+const ymd = (d: Date) => d.toISOString().split("T")[0]
 
 async function getToken(clientId: string, clientSecret: string): Promise<string> {
   const res = await fetch(`${ROLLER_BASE}/token`, {
@@ -33,36 +36,42 @@ async function getToken(clientId: string, clientSecret: string): Promise<string>
     body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
   })
   const text = await res.text()
-  if (!res.ok) throw new Error(`Token request failed: ${res.status} - ${text.slice(0, 300)}`)
+  if (!res.ok) throw new Error(`Token failed: ${res.status} - ${text.slice(0, 300)}`)
   const token = JSON.parse(text)?.access_token
-  if (!token) throw new Error(`No access_token in response: ${text.slice(0, 300)}`)
+  if (!token) throw new Error(`No access_token: ${text.slice(0, 300)}`)
   return token
 }
 
-async function probeRevenue(token: string, from: string, to: string) {
-  const queries = [
-    `startDate=${from}&endDate=${to}`,
-    `dateFrom=${from}&dateTo=${to}`,
-  ]
-  for (const path of REVENUE_PATHS) {
-    for (const q of queries) {
-      const url = `${ROLLER_BASE}${path}?${q}`
-      try {
-        const res = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-        })
-        const text = await res.text()
-        if (res.ok) return { url, ok: true, body: text }
-        // 404 = wrong path, 409 = deprecated -> keep probing other candidates
-        if (res.status !== 404 && res.status !== 409) {
-          return { url, ok: false, status: res.status, body: text.slice(0, 300) }
-        }
-      } catch (e) {
-        return { url, ok: false, error: String(e).slice(0, 200) }
-      }
+// Normalise whatever shape ROLLER returns into a flat array of entries.
+function extractEntries(parsed: unknown): any[] {
+  if (Array.isArray(parsed)) return parsed
+  if (parsed && typeof parsed === "object") {
+    const o = parsed as Record<string, unknown>
+    for (const key of ["data", "items", "results", "revenueEntries", "entries"]) {
+      if (Array.isArray(o[key])) return o[key] as any[]
     }
   }
-  return { ok: false, status: 404, note: "No revenue path matched" }
+  return []
+}
+
+async function fetchRevenueEntries(token: string, startDate: string, endDate: string) {
+  const all: any[] = []
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const url = `${ROLLER_BASE}/reporting/revenue-entries?startDate=${startDate}&endDate=${endDate}&pageNumber=${page}`
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    })
+    const text = await res.text()
+    if (!res.ok) {
+      if (page === 1) throw new Error(`Revenue fetch failed: ${res.status} - ${text.slice(0, 300)}`)
+      break // a later page failed; keep what we have
+    }
+    const entries = extractEntries(JSON.parse(text))
+    all.push(...entries)
+    if (entries.length === 0) break // no more pages
+    await sleep(RATE_LIMIT_MS)
+  }
+  return all
 }
 
 Deno.serve(async (req) => {
@@ -73,70 +82,68 @@ Deno.serve(async (req) => {
     const clientSecret = Deno.env.get("ROLLER_CLIENT_SECRET_FRAN")
     if (!clientId || !clientSecret) throw new Error("Missing Roller credentials in secrets")
 
-    const to = new Date().toISOString().split("T")[0]
-    const from = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+    const today = new Date()
+    const start = new Date(today.getTime() - DAYS_BACK * 86400_000)
+    const startDate = ymd(start)
+    const endDate = ymd(new Date(today.getTime() + 86400_000)) // exclusive end = tomorrow
 
-    // 1. Authenticate (JSON body, per ROLLER docs)
+    // 1. Auth
     const token = await getToken(clientId, clientSecret)
 
-    // 2. Find + fetch revenue data
-    const revenue = await probeRevenue(token, from, to)
-    if (!revenue.ok) {
-      return new Response(
-        JSON.stringify(
-          { success: true, auth: "ok", revenue, note: "Token works. Paste this so we can map the revenue endpoint." },
-          null,
-          2
-        ),
-        { headers: { ...cors, "Content-Type": "application/json" } }
-      )
-    }
+    // 2. Fetch + paginate revenue entries
+    const entries = await fetchRevenueEntries(token, startDate, endDate)
 
-    // 3. Map revenue into the sales table
-    const parsed = JSON.parse(revenue.body!)
-    const items =
-      parsed?.data || parsed?.items || parsed?.revenues || parsed?.results || (Array.isArray(parsed) ? parsed : [])
-
-    // Aggregate revenue per day (Roller returns granular entries)
+    // 3. Aggregate CA per day: funds received on Transaction entries
     const byDay = new Map<string, number>()
-    for (const it of items) {
-      const rawDate = it.date || it.entryDate || it.businessDate || it.startDate || it.transactionDate
-      const amount = it.fundsReceived ?? it.recognisedRevenue ?? it.total ?? it.amount ?? it.revenue ?? it.netRevenue
-      if (rawDate && amount != null) {
-        const day = String(rawDate).split("T")[0]
-        byDay.set(day, (byDay.get(day) ?? 0) + Number(amount))
-      }
+    for (const e of entries) {
+      if (e?.entryType !== "Transaction") continue
+      const day = String(e.recordDate ?? e.transactionDate ?? "").split("T")[0]
+      const funds = Number(e.fundsReceived ?? 0)
+      if (!day || Number.isNaN(funds)) continue
+      byDay.set(day, (byDay.get(day) ?? 0) + funds)
     }
 
-    const rows = [...byDay.entries()].map(([date, amount]) => ({
-      site_id: SITE_ID,
-      date,
-      amount: Math.round(amount * 100) / 100,
-      target: 10000,
-      period: "day",
-    }))
+    const rows = [...byDay.entries()]
+      .map(([date, amount]) => ({
+        site_id: SITE_ID,
+        date,
+        amount: Math.round(amount * 100) / 100,
+        target: DAILY_TARGET,
+        period: "day",
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date))
 
-    let upserted = 0
+    // 4. Replace the synced window in `sales` (delete + insert, no unique constraint needed)
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    )
+
+    let synced = 0
     if (rows.length) {
-      const supabase = createClient(
-        Deno.env.get("SUPABASE_URL")!,
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-      )
-      const { error } = await supabase.from("sales").upsert(rows, { onConflict: "site_id,date,period" })
-      if (error) throw error
-      upserted = rows.length
+      const { error: delErr } = await supabase
+        .from("sales")
+        .delete()
+        .eq("site_id", SITE_ID)
+        .eq("period", "day")
+        .gte("date", startDate)
+        .lte("date", ymd(today))
+      if (delErr) throw delErr
+
+      const { error: insErr } = await supabase.from("sales").insert(rows)
+      if (insErr) throw insErr
+      synced = rows.length
     }
 
     return new Response(
       JSON.stringify(
         {
           success: true,
-          auth: "ok",
-          revenueEndpoint: revenue.url,
-          dateRange: { from, to },
-          daysSynced: upserted,
-          entriesReceived: items.length,
-          sample: JSON.stringify(items[0] ?? null).slice(0, 500),
+          dateRange: { startDate, endDate },
+          entriesReceived: entries.length,
+          daysSynced: synced,
+          totalCA: Math.round(rows.reduce((s, r) => s + r.amount, 0) * 100) / 100,
+          days: rows,
         },
         null,
         2
