@@ -10,8 +10,8 @@
 //   IMPORTANT: the range is capped at 1 day -> endDate must be startDate + 1 (exclusive).
 //   So we loop day-by-day. ROLLER rate limit is ~1 request/second per credentials.
 //
-// CA HT encaissé (chiffre d'affaires hors taxes) = sum of (fundsReceived - taxOnFundsReceived)
-// for entryType === "Transaction", grouped per day.
+// CA HT (chiffre d'affaires hors taxes) = sum of `netRevenue` across ALL entry types, grouped per day.
+// netRevenue is the recognised after-tax (ex-VAT) revenue; it lives on Recognition entries.
 //
 // Optional POST body to control the window:
 //   { "days": 30 }                              -> last 30 days
@@ -136,12 +136,11 @@ Deno.serve(async (req) => {
         const entries = await fetchDay(token, dayStr)
         entriesReceived += entries.length
         for (const e of entries) {
-          if (e?.entryType !== "Transaction") continue
-          const d = String(e.recordDate ?? e.transactionDate ?? dayStr).split("T")[0]
-          // CA HT encaissé = funds received (TTC) minus the tax on those funds
-          const ht = Number(e.fundsReceived ?? 0) - Number(e.taxOnFundsReceived ?? 0)
-          if (Number.isNaN(ht)) continue
-          byDay.set(d, (byDay.get(d) ?? 0) + ht)
+          // CA HT = recognised net revenue, summed across all entry types for the day
+          const d = String(e.recordDate ?? dayStr).split("T")[0]
+          const net = Number(e.netRevenue ?? 0)
+          if (Number.isNaN(net)) continue
+          byDay.set(d, (byDay.get(d) ?? 0) + net)
         }
         if (!byDay.has(dayStr)) byDay.set(dayStr, byDay.get(dayStr) ?? 0) // keep 0-CA days
       } catch (e) {
