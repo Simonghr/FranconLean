@@ -1,0 +1,27 @@
+name: Sync Roller Revenue (nightly)
+
+on:
+  schedule:
+    # Every night at 03:00 UTC (05:00 Paris time)
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Number of days to sync (default: 3)"
+        required: false
+        default: "3"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call sync-roller Edge Function
+        run: |
+          DAYS="${{ github.event.inputs.days || '3' }}"
+          RESPONSE=$(curl -sf -X POST \
+            "${{ secrets.SUPABASE_URL }}/functions/v1/sync-roller" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"days\": $DAYS}")
+          echo "$RESPONSE" | jq .
+          echo "$RESPONSE" | jq -e '.success == true'
