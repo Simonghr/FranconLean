@@ -166,6 +166,12 @@ Deno.serve(async (req) => {
 
     let synced = 0
     if (rows.length) {
+      // Ensure the Franconville site row exists (sales.site_id has a FK to sites.id)
+      const { error: siteErr } = await supabase
+        .from("sites")
+        .upsert({ id: SITE_ID, name: "Franconville" }, { onConflict: "id" })
+      if (siteErr) throw new Error(`upsert site: ${siteErr.message}`)
+
       const { error: delErr } = await supabase
         .from("sales")
         .delete()
@@ -173,10 +179,10 @@ Deno.serve(async (req) => {
         .eq("period", "day")
         .gte("date", startDate)
         .lte("date", lastDateStr)
-      if (delErr) throw delErr
+      if (delErr) throw new Error(`delete sales: ${delErr.message}`)
 
       const { error: insErr } = await supabase.from("sales").insert(rows)
-      if (insErr) throw insErr
+      if (insErr) throw new Error(`insert sales: ${insErr.message}`)
       synced = rows.length
     }
 
@@ -197,7 +203,9 @@ Deno.serve(async (req) => {
       { headers: { ...cors, "Content-Type": "application/json" } }
     )
   } catch (error) {
-    return new Response(JSON.stringify({ success: false, error: String(error) }), {
+    const message =
+      error instanceof Error ? error.message : (error as any)?.message ?? JSON.stringify(error)
+    return new Response(JSON.stringify({ success: false, error: message }), {
       status: 500,
       headers: { ...cors, "Content-Type": "application/json" },
     })
