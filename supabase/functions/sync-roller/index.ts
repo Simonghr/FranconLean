@@ -1,21 +1,16 @@
 // ROLLER -> FranconLean revenue sync.
 //
-// Auth (confirmed from docs):
-//   POST https://api.roller.app/token  | Content-Type: application/json
-//   body {"client_id","client_secret"} -> { access_token, token_type:"Bearer", expires_in }
+// Auth:  POST https://api.roller.app/token  (JSON body {client_id, client_secret})
+// Data:  GET  https://api.roller.app/reporting/revenue-entries?startDate&endDate&pageNumber
+//        Range capped at 1 day -> loop day-by-day. Rate limit ~1 req/sec.
 //
-// Revenue (confirmed from docs):
-//   GET https://api.roller.app/reporting/revenue-entries?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&pageNumber=N
-//   Header: Authorization: Bearer <token>, Accept: application/json
-//   IMPORTANT: the range is capped at 1 day -> endDate must be startDate + 1 (exclusive).
-//   So we loop day-by-day. ROLLER rate limit is ~1 request/second per credentials.
+// CA HT = sum of `netRevenue` across ALL entry types, per day.
+// Verified: 2026-05-30 sums to 12,130.87 EUR, matching Roller's "Revenu" dashboard exactly.
 //
-// CA HT (chiffre d'affaires hors taxes) = sum of `netRevenue` across ALL entry types, grouped per day.
-// netRevenue is the recognised after-tax (ex-VAT) revenue; it lives on Recognition entries.
-//
-// Optional POST body to control the window:
-//   { "days": 30 }                              -> last 30 days
-//   { "startDate": "2026-05-01", "endDate": "2026-05-31" }  -> explicit range (inclusive)
+// POST body options:
+//   { "days": 30 }                                      -> last 30 days, sync to DB
+//   { "startDate":"2026-05-01","endDate":"2026-05-31" } -> explicit range, sync to DB
+//   { ...range, "debug": true } -> NO DB write; sums key fields broken down by entryType
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -23,9 +18,19 @@ const ROLLER_BASE = "https://api.roller.app"
 const SITE_ID = "00000000-0000-0000-0000-000000000001"
 const DEFAULT_DAYS = 7
 const DAILY_TARGET = 10000
-const MAX_PAGES_PER_DAY = 10
-const RATE_LIMIT_MS = 1050 // ROLLER allows ~1 request/second per credentials
+const MAX_PAGES_PER_DAY = 20
+const RATE_LIMIT_MS = 1050
 const DAY_MS = 86400_000
+
+const DEBUG_FIELDS = [
+  "netRevenue",
+  "taxPayable",
+  "recognisedDiscount",
+  "transactionValue",
+  "fundsReceived",
+  "taxOnFundsReceived",
+  "feeRevenue",
+]
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -34,6 +39,7 @@ const cors = {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 const ymd = (d: Date) => d.toISOString().split("T")[0]
+const r2 = (n: number) => Math.round(n * 100) / 100
 
 async function getToken(clientId: string, clientSecret: string): Promise<string> {
   const res = await fetch(`${ROLLER_BASE}/token`, {
@@ -48,7 +54,6 @@ async function getToken(clientId: string, clientSecret: string): Promise<string>
   return token
 }
 
-// Normalise whatever shape ROLLER returns into a flat array of entries.
 function extractEntries(parsed: unknown): any[] {
   if (Array.isArray(parsed)) return parsed
   if (parsed && typeof parsed === "object") {
@@ -60,7 +65,6 @@ function extractEntries(parsed: unknown): any[] {
   return []
 }
 
-// GET one page, retrying once on 429 (rate limited).
 async function getPage(token: string, dayStart: string, dayEnd: string, page: number) {
   const url = `${ROLLER_BASE}/reporting/revenue-entries?startDate=${dayStart}&endDate=${dayEnd}&pageNumber=${page}`
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -78,7 +82,6 @@ async function getPage(token: string, dayStart: string, dayEnd: string, page: nu
   throw new Error(`${dayStart}: rate limited (429) after retry`)
 }
 
-// Fetch one day's entries (handles pagination within the day).
 async function fetchDay(token: string, dayStart: string) {
   const dayEnd = ymd(new Date(new Date(dayStart).getTime() + DAY_MS))
   const all: any[] = []
@@ -99,17 +102,16 @@ Deno.serve(async (req) => {
     const clientSecret = Deno.env.get("ROLLER_CLIENT_SECRET_FRAN")
     if (!clientId || !clientSecret) throw new Error("Missing Roller credentials in secrets")
 
-    // Parse optional body (ignore the dashboard's default {"name":"Functions"}).
     let body: any = {}
     try {
       body = await req.json()
-    } catch (_) {
-      // no/invalid body -> defaults
-    }
+    } catch (_) {}
+
+    const debug = !!body?.debug
 
     const today = new Date()
     let firstDay: Date
-    let lastDay: Date // inclusive
+    let lastDay: Date
     if (body?.startDate && body?.endDate) {
       firstDay = new Date(body.startDate)
       lastDay = new Date(body.endDate)
@@ -122,11 +124,10 @@ Deno.serve(async (req) => {
     const startDate = ymd(firstDay)
     const lastDateStr = ymd(lastDay)
 
-    // 1. Auth
     const token = await getToken(clientId, clientSecret)
 
-    // 2. Loop day-by-day (API max range = 1 day)
     const byDay = new Map<string, number>()
+    const debugDays: any[] = []
     const errors: string[] = []
     let entriesReceived = 0
 
@@ -135,12 +136,24 @@ Deno.serve(async (req) => {
       try {
         const entries = await fetchDay(token, dayStr)
         entriesReceived += entries.length
-        // Roller's per-day query is authoritative for the day; attribute all entries to dayStr
-        // (avoids UTC vs venue-local timezone bleed from recordDate).
+
+        if (debug) {
+          const types: Record<string, any> = {}
+          for (const e of entries) {
+            const t = String(e?.entryType ?? "Unknown")
+            const slot = (types[t] ??= { count: 0 })
+            slot.count += 1
+            for (const f of DEBUG_FIELDS) slot[f] = (slot[f] ?? 0) + Number(e[f] ?? 0)
+          }
+          for (const t of Object.keys(types)) {
+            for (const f of DEBUG_FIELDS) types[t][f] = r2(types[t][f])
+          }
+          debugDays.push({ date: dayStr, entries: entries.length, byType: types })
+        }
+
+        // CA HT = sum of netRevenue across ALL entry types
         let dayTotal = 0
         for (const e of entries) {
-          // CA HT = recognised revenue -> netRevenue on Recognition entries only
-          if (e?.entryType !== "Recognition") continue
           const net = Number(e.netRevenue ?? 0)
           if (!Number.isNaN(net)) dayTotal += net
         }
@@ -150,17 +163,27 @@ Deno.serve(async (req) => {
       }
     }
 
+    if (debug) {
+      return new Response(
+        JSON.stringify(
+          { success: true, mode: "debug", dateRange: { startDate, endDate: lastDateStr }, entriesReceived, debugDays, errors: errors.length ? errors : undefined },
+          null,
+          2
+        ),
+        { headers: { ...cors, "Content-Type": "application/json" } }
+      )
+    }
+
     const rows = [...byDay.entries()]
       .map(([date, amount]) => ({
         site_id: SITE_ID,
         date,
-        amount: Math.round(amount * 100) / 100,
+        amount: r2(amount),
         target: DAILY_TARGET,
         period: "day",
       }))
       .sort((a, b) => a.date.localeCompare(b.date))
 
-    // 3. Replace the synced window in `sales` (delete + insert)
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
@@ -168,7 +191,6 @@ Deno.serve(async (req) => {
 
     let synced = 0
     if (rows.length) {
-      // Ensure the Franconville site row exists (sales.site_id has a FK to sites.id)
       const { error: siteErr } = await supabase
         .from("sites")
         .upsert({ id: SITE_ID, name: "Franconville" }, { onConflict: "id" })
@@ -195,7 +217,7 @@ Deno.serve(async (req) => {
           dateRange: { startDate, endDate: lastDateStr },
           entriesReceived,
           daysSynced: synced,
-          totalCA: Math.round(rows.reduce((s, r) => s + r.amount, 0) * 100) / 100,
+          totalCA: r2(rows.reduce((s, r) => s + r.amount, 0)),
           days: rows,
           errors: errors.length ? errors : undefined,
         },
