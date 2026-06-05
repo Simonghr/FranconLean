@@ -16,22 +16,10 @@ export async function seedDatabase(): Promise<void> {
   })
   if (siteError) throw siteError
 
-  // 2. Insert 30 days of sales
-  const sales = Array.from({ length: 30 }, (_, i) => {
-    const date = new Date()
-    date.setDate(date.getDate() - (29 - i))
-    const target = 10000
-    const variance = (Math.random() - 0.4) * 4000
-    return {
-      site_id: SITE_ID,
-      date: date.toISOString().split('T')[0],
-      amount: Math.max(8000, Math.min(15000, target + variance)),
-      target,
-      period: 'day' as const,
-    }
-  })
-  const { error: salesError } = await supabase.from('sales').insert(sales)
-  if (salesError) throw salesError
+  // 2. Sales: NE PAS générer de fausses ventes.
+  //    Le CA réel provient exclusivement de Roller via l'Edge Function
+  //    `rapid-processor`. Injecter de faux chiffres ici polluerait le
+  //    graphe (doublons / valeurs aléatoires mélangées au CA réel).
 
   // 3. Insert 10 incidents
   const now = Date.now()
