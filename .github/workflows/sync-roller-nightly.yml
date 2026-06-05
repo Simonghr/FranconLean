@@ -22,7 +22,7 @@ jobs:
           BASE="${BASE%/}"  # strip any trailing slash
 
           HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" -X POST \
-            "$BASE/functions/v1/sync-roller" \
+            "$BASE/functions/v1/rapid-processor" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "Content-Type: application/json" \
             -d "{\"days\": $DAYS}" \
