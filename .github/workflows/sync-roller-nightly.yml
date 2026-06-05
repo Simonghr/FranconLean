@@ -18,10 +18,24 @@ jobs:
       - name: Call sync-roller Edge Function
         run: |
           DAYS="${{ github.event.inputs.days || '3' }}"
-          RESPONSE=$(curl -sf -X POST \
-            "${{ secrets.SUPABASE_URL }}/functions/v1/sync-roller" \
+          BASE="${{ secrets.SUPABASE_URL }}"
+          BASE="${BASE%/}"  # strip any trailing slash
+
+          HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" -X POST \
+            "$BASE/functions/v1/sync-roller" \
             -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
             -H "Content-Type: application/json" \
-            -d "{\"days\": $DAYS}")
-          echo "$RESPONSE" | jq .
-          echo "$RESPONSE" | jq -e '.success == true'
+            -d "{\"days\": $DAYS}" \
+            --max-time 300)
+
+          echo "HTTP status: $HTTP_CODE"
+          echo "Response body:"
+          cat response.json | jq . 2>/dev/null || cat response.json
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "::error::sync-roller returned HTTP $HTTP_CODE"
+            exit 1
+          fi
+          jq -e '.success == true' response.json > /dev/null \
+            || { echo "::error::sync-roller reported success=false"; exit 1; }
+          echo "Sync OK"
