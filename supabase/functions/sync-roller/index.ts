@@ -135,14 +135,14 @@ Deno.serve(async (req) => {
       try {
         const entries = await fetchDay(token, dayStr)
         entriesReceived += entries.length
+        // Roller's per-day query is authoritative for the day; attribute all entries to dayStr
+        // (avoids UTC vs venue-local timezone bleed from recordDate).
+        let dayTotal = 0
         for (const e of entries) {
-          // CA HT = recognised net revenue, summed across all entry types for the day
-          const d = String(e.recordDate ?? dayStr).split("T")[0]
           const net = Number(e.netRevenue ?? 0)
-          if (Number.isNaN(net)) continue
-          byDay.set(d, (byDay.get(d) ?? 0) + net)
+          if (!Number.isNaN(net)) dayTotal += net
         }
-        if (!byDay.has(dayStr)) byDay.set(dayStr, byDay.get(dayStr) ?? 0) // keep 0-CA days
+        byDay.set(dayStr, dayTotal) // CA HT = recognised net revenue for the day
       } catch (e) {
         errors.push(String(e).slice(0, 200))
       }
