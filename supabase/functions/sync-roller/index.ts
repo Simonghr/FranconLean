@@ -139,10 +139,12 @@ Deno.serve(async (req) => {
         // (avoids UTC vs venue-local timezone bleed from recordDate).
         let dayTotal = 0
         for (const e of entries) {
+          // CA HT = recognised revenue -> netRevenue on Recognition entries only
+          if (e?.entryType !== "Recognition") continue
           const net = Number(e.netRevenue ?? 0)
           if (!Number.isNaN(net)) dayTotal += net
         }
-        byDay.set(dayStr, dayTotal) // CA HT = recognised net revenue for the day
+        byDay.set(dayStr, dayTotal)
       } catch (e) {
         errors.push(String(e).slice(0, 200))
       }
