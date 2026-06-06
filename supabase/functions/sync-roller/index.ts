@@ -30,6 +30,11 @@ const DEBUG_FIELDS = [
   "fundsReceived",
   "taxOnFundsReceived",
   "feeRevenue",
+  "deferredRevenue",
+  "deferredRevenueGiftCards",
+  "manualGiftCardAdjustment",
+  "deferredRevenueOther",
+  "accountsReceivable",
 ]
 
 // Date fields to inspect — helps diagnose which date Roller uses to assign an entry to a day
