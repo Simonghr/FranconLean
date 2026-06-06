@@ -32,6 +32,18 @@ const DEBUG_FIELDS = [
   "feeRevenue",
 ]
 
+// Date fields to inspect — helps diagnose which date Roller uses to assign an entry to a day
+const DATE_FIELDS = [
+  "date",
+  "transactionDate",
+  "recognitionDate",
+  "recognisedDate",
+  "createdAt",
+  "updatedAt",
+  "sessionDate",
+  "visitDate",
+]
+
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -148,7 +160,20 @@ Deno.serve(async (req) => {
           for (const t of Object.keys(types)) {
             for (const f of DEBUG_FIELDS) types[t][f] = r2(types[t][f])
           }
-          debugDays.push({ date: dayStr, entries: entries.length, byType: types })
+          // Expose all date fields found on the first entry to understand Roller's date model
+          const dateFieldsFound: Record<string, string> = {}
+          if (entries.length > 0) {
+            for (const f of DATE_FIELDS) {
+              if (entries[0][f] !== undefined) dateFieldsFound[f] = String(entries[0][f])
+            }
+            // Also dump ALL keys from first entry to catch unknown date fields
+            for (const k of Object.keys(entries[0])) {
+              if (k.toLowerCase().includes("date") || k.toLowerCase().includes("time") || k.toLowerCase().includes("at")) {
+                if (!(k in dateFieldsFound)) dateFieldsFound[k] = String(entries[0][k])
+              }
+            }
+          }
+          debugDays.push({ date: dayStr, entries: entries.length, byType: types, dateFields: dateFieldsFound, firstEntryKeys: entries.length > 0 ? Object.keys(entries[0]) : [] })
         }
 
         // CA HT = sum of netRevenue across ALL entry types
