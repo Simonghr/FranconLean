@@ -35,6 +35,12 @@ const DEBUG_FIELDS = [
   "manualGiftCardAdjustment",
   "deferredRevenueOther",
   "accountsReceivable",
+  "voucherFundsReceived",
+  "discount",
+  "deferredFeeRevenue",
+  "taxOnFees",
+  "multiVenueGiftCardReceivable",
+  "multiVenueGiftCardPayable",
 ]
 
 // Date fields to inspect — helps diagnose which date Roller uses to assign an entry to a day
@@ -171,14 +177,21 @@ Deno.serve(async (req) => {
             for (const f of DATE_FIELDS) {
               if (entries[0][f] !== undefined) dateFieldsFound[f] = String(entries[0][f])
             }
-            // Also dump ALL keys from first entry to catch unknown date fields
             for (const k of Object.keys(entries[0])) {
               if (k.toLowerCase().includes("date") || k.toLowerCase().includes("time") || k.toLowerCase().includes("at")) {
                 if (!(k in dateFieldsFound)) dateFieldsFound[k] = String(entries[0][k])
               }
             }
           }
-          debugDays.push({ date: dayStr, entries: entries.length, byType: types, dateFields: dateFieldsFound, firstEntryKeys: entries.length > 0 ? Object.keys(entries[0]) : [] })
+          // Dump the first Recognition entry in full to inspect its dates and all numeric fields
+          const firstRecognition = entries.find((e: any) => e?.entryType === "Recognition") ?? null
+          debugDays.push({
+            date: dayStr,
+            entries: entries.length,
+            byType: types,
+            dateFields: dateFieldsFound,
+            firstRecognitionEntry: firstRecognition,
+          })
         }
 
         // CA HT = sum of netRevenue across ALL entry types
