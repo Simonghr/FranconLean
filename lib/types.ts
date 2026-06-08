@@ -26,6 +26,15 @@ export interface Sale {
   period: SalePeriod
 }
 
+export interface GxScore {
+  id: string
+  site_id: string
+  date: string
+  score: number
+  responses_count: number
+  period: SalePeriod
+}
+
 export type IncidentCategory = 'process' | 'quality' | 'security' | 'client' | 'it' | 'logistics' | 'other'
 export type IncidentImpact = 'low' | 'medium' | 'high'
 export type IncidentStatus = 'open' | 'in_progress' | 'resolved' | 'standardized'

@@ -30,6 +30,17 @@ CREATE TABLE sales (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- GX Score (Roller's Guest Experience survey score, -100..+100, aggregated daily)
+CREATE TABLE gx_scores (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  date DATE NOT NULL,
+  score NUMERIC(6,2) NOT NULL DEFAULT 0,
+  responses_count INTEGER NOT NULL DEFAULT 0,
+  period TEXT NOT NULL CHECK (period IN ('day', 'week', 'month')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Incidents
 CREATE TABLE incidents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

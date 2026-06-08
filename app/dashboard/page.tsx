@@ -19,11 +19,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { mockBriefing } from "@/lib/mockData"
 import * as incidentsRepo from "@/lib/repositories/incidents"
 import * as salesRepo from "@/lib/repositories/sales"
+import * as gxRepo from "@/lib/repositories/gx"
 import * as feedbackRepo from "@/lib/repositories/feedback"
 import * as kaizenRepo from "@/lib/repositories/kaizen"
 import { generateInsights } from "@/lib/services/insightsService"
 import { seedDatabase } from "@/lib/seed"
-import type { Incident, Sale, CustomerFeedback, Insight, IncidentCategory, IncidentImpact } from "@/lib/types"
+import type { Incident, Sale, GxScore, CustomerFeedback, Insight, IncidentCategory, IncidentImpact } from "@/lib/types"
 
 const SITE_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -32,6 +33,7 @@ const mockSite = { id: SITE_ID, name: 'Franconville', address: '12 Rue du Commer
 export default function DashboardPage() {
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [sales, setSales] = useState<Sale[]>([])
+  const [gxScores, setGxScores] = useState<GxScore[]>([])
   const [feedback, setFeedback] = useState<CustomerFeedback[]>([])
   const [insights, setInsights] = useState<Insight[]>([])
   const [loading, setLoading] = useState(true)
@@ -49,14 +51,16 @@ export default function DashboardPage() {
     async function load() {
       try {
         await seedDatabase()
-        const [inc, sal, fb, kz] = await Promise.all([
+        const [inc, sal, gx, fb, kz] = await Promise.all([
           incidentsRepo.getAll(SITE_ID),
           salesRepo.getAll(SITE_ID),
+          gxRepo.getAll(SITE_ID),
           feedbackRepo.getAll(SITE_ID),
           kaizenRepo.getAll(SITE_ID),
         ])
         setIncidents(inc)
         setSales(sal)
+        setGxScores(gx)
         setFeedback(fb)
         setInsights(generateInsights(inc, sal, fb, kz, SITE_ID))
       } catch (err) {
@@ -72,6 +76,11 @@ export default function DashboardPage() {
   const caToday = Math.round(todaySale?.amount ?? 0)
   const caTarget = Math.round(todaySale?.target ?? 0)
   const caTrend = caTarget > 0 ? Math.round(((caToday - caTarget) / caTarget) * 100) : 0
+
+  const todayGx = gxScores[gxScores.length - 1]
+  const previousGx = gxScores[gxScores.length - 2]
+  const gxScore = todayGx?.score ?? 0
+  const gxTrend = previousGx ? Math.round(gxScore - previousGx.score) : 0
 
   const openIncidents = incidents.filter(i => i.status === "open" || i.status === "in_progress")
   const weekFeedback = feedback.filter(f => {
@@ -123,7 +132,7 @@ export default function DashboardPage() {
       <BriefingHeader briefing={mockBriefing} siteName={mockSite.name} />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KPICard
           title="CA Aujourd'hui"
           value={loading ? "…" : `${caToday.toLocaleString("fr-FR")} €`}
@@ -131,6 +140,14 @@ export default function DashboardPage() {
           trend={caTrend}
           trendLabel="vs objectif"
           status={caTrend >= 0 ? "good" : caTrend > -10 ? "warning" : "critical"}
+        />
+        <KPICard
+          title="GX Score"
+          value={loading ? "…" : gxScore}
+          subtitle={`${todayGx?.responses_count ?? 0} avis collectés`}
+          trend={gxTrend}
+          trendLabel="vs jour précédent"
+          status={gxScore >= 50 ? "good" : gxScore >= 0 ? "warning" : "critical"}
         />
         <KPICard
           title="Incidents Ouverts"
