@@ -1,15 +1,18 @@
-name: Sync Roller Revenue (nightly)
+name: Sync Roller Revenue
 
 on:
   schedule:
-    # Every night at 03:00 UTC (05:00 Paris time)
-    - cron: "0 3 * * *"
+    # Every 3 hours — keeps the last 7 days continuously refreshed so our
+    # numbers converge to Roller's "Revenu" figure as it settles (Roller's
+    # own dashboard keeps recalculating recent days for ~5-6 days after the
+    # fact, due to revenue-recognition processing lag on their side).
+    - cron: "0 */3 * * *"
   workflow_dispatch:
     inputs:
       days:
-        description: "Number of days to sync (default: 3)"
+        description: "Number of days to re-sync (default: 7 — covers Roller's settling window)"
         required: false
-        default: "3"
+        default: "7"
 
 jobs:
   sync:
@@ -17,7 +20,7 @@ jobs:
     steps:
       - name: Call rapid-processor Edge Function (chunked by 10 days)
         run: |
-          DAYS="${{ github.event.inputs.days || '3' }}"
+          DAYS="${{ github.event.inputs.days || '7' }}"
           BASE="${{ secrets.SUPABASE_URL }}"
           BASE="${BASE%/}"  # strip any trailing slash
           CHUNK=10          # max days per call (Supabase compute limit)
