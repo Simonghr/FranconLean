@@ -153,12 +153,23 @@ Deno.serve(async (req) => {
     const debugDays: any[] = []
     const errors: string[] = []
     let entriesReceived = 0
+    // Accumulate every entry's (recordDate, netRevenue) across the whole range so we can
+    // re-bucket by alternate "business day" cutoff hours after the fetch loop (debug only).
+    const allEntriesForShiftAnalysis: { recordDate: string; netRevenue: number }[] = []
 
     for (let cur = new Date(firstDay); ymd(cur) <= lastDateStr; cur = new Date(cur.getTime() + DAY_MS)) {
       const dayStr = ymd(cur)
       try {
         const entries = await fetchDay(token, dayStr)
         entriesReceived += entries.length
+
+        if (debug) {
+          for (const e of entries) {
+            const rd = String(e.recordDate ?? e.transactionDate ?? "")
+            const net = Number(e.netRevenue ?? 0)
+            if (rd && !Number.isNaN(net)) allEntriesForShiftAnalysis.push({ recordDate: rd, netRevenue: net })
+          }
+        }
 
         if (debug) {
           const types: Record<string, any> = {}
@@ -319,10 +330,54 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Re-bucket all collected entries using alternate "business day" cutoff hours
+    // (e.g. if Roller's day boundary is the venue's opening time, not midnight Paris time).
+    // Compare against known reference figures from Roller's own Daily Summary screenshots.
+    let businessDayShiftAnalysis: any = undefined
+    if (debug) {
+      const KNOWN_ROLLER_REVENUE: Record<string, number> = {
+        "2026-05-30": 12130.87,
+        "2026-05-31": 7613.95,
+        "2026-06-02": 651.77,
+        "2026-06-06": 9861.11,
+        "2026-06-07": 9751.70,
+      }
+      const shiftHoursCandidates = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+      const shiftResults: any[] = []
+      for (const shiftHours of shiftHoursCandidates) {
+        const byShiftedDay: Record<string, number> = {}
+        for (const { recordDate, netRevenue } of allEntriesForShiftAnalysis) {
+          const d = new Date(recordDate)
+          d.setUTCHours(d.getUTCHours() - shiftHours)
+          const dateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(d)
+          byShiftedDay[dateStr] = r2((byShiftedDay[dateStr] ?? 0) + netRevenue)
+        }
+        let totalAbsError = 0
+        let comparedDays = 0
+        const perDay: Record<string, any> = {}
+        for (const [date, rollerValue] of Object.entries(KNOWN_ROLLER_REVENUE)) {
+          const ours = byShiftedDay[date]
+          if (ours === undefined) continue
+          const diff = r2(ours - rollerValue)
+          totalAbsError += Math.abs(diff)
+          comparedDays++
+          perDay[date] = { roller: rollerValue, ours, diff }
+        }
+        shiftResults.push({
+          shiftHours,
+          totalAbsError: r2(totalAbsError),
+          comparedDays,
+          perDay,
+        })
+      }
+      shiftResults.sort((a, b) => a.totalAbsError - b.totalAbsError)
+      businessDayShiftAnalysis = { note: "Lower totalAbsError = better match. shiftHours = how many hours before midnight the 'business day' boundary sits.", results: shiftResults }
+    }
+
     if (debug) {
       return new Response(
         JSON.stringify(
-          { success: true, mode: "debug", dateRange: { startDate, endDate: lastDateStr }, entriesReceived, debugDays, errors: errors.length ? errors : undefined },
+          { success: true, mode: "debug", dateRange: { startDate, endDate: lastDateStr }, entriesReceived, businessDayShiftAnalysis, debugDays, errors: errors.length ? errors : undefined },
           null,
           2
         ),
