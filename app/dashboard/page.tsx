@@ -79,8 +79,8 @@ export default function DashboardPage() {
 
   const todayGx = gxScores[gxScores.length - 1]
   const previousGx = gxScores[gxScores.length - 2]
-  const gxScore = todayGx?.score ?? 0
-  const gxTrend = previousGx ? Math.round(gxScore - previousGx.score) : 0
+  const gxScore = todayGx?.score ?? null
+  const gxTrend = (gxScore !== null && previousGx) ? Math.round(gxScore - previousGx.score) : 0
 
   const openIncidents = incidents.filter(i => i.status === "open" || i.status === "in_progress")
   const weekFeedback = feedback.filter(f => {
@@ -143,11 +143,11 @@ export default function DashboardPage() {
         />
         <KPICard
           title="GX Score"
-          value={loading ? "…" : gxScore}
-          subtitle={`${todayGx?.responses_count ?? 0} avis collectés`}
+          value={loading ? "…" : gxScore !== null ? `${gxScore} pts` : "–"}
+          subtitle={todayGx ? `${todayGx.responses_count} avis · ${todayGx.date}` : "Aucune donnée"}
           trend={gxTrend}
           trendLabel="vs jour précédent"
-          status={gxScore >= 50 ? "good" : gxScore >= 0 ? "warning" : "critical"}
+          status={gxScore === null ? "warning" : gxScore >= 50 ? "good" : gxScore >= 0 ? "warning" : "critical"}
         />
         <KPICard
           title="Incidents Ouverts"
