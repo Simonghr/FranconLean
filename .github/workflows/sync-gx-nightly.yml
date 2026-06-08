@@ -1,0 +1,65 @@
+name: Sync Roller GX Score
+
+on:
+  schedule:
+    # Once a day — guest survey responses can be submitted/updated for several days
+    # after a visit, so we re-sync a rolling window to catch late responses.
+    - cron: "30 4 * * *"
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Number of days to re-sync (default: 14 — covers the survey response window)"
+        required: false
+        default: "14"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call sync-gx Edge Function (chunked by 10 days)
+        run: |
+          DAYS="${{ github.event.inputs.days || '14' }}"
+          BASE="${{ secrets.SUPABASE_URL }}"
+          BASE="${BASE%/}"  # strip any trailing slash
+          CHUNK=10          # max days per call (Supabase compute limit)
+
+          # Build the inclusive date window [start .. end] ending today.
+          END=$(date -u +%F)
+          START=$(date -u -d "$END - $((DAYS - 1)) days" +%F)
+
+          echo "Backfill window: $START -> $END (chunks of $CHUNK days)"
+
+          GRAND_RESPONSES=0
+          FAILED=0
+          cur="$START"
+
+          while [ "$cur" \< "$END" ] || [ "$cur" = "$END" ]; do
+            chunk_end=$(date -u -d "$cur + $((CHUNK - 1)) days" +%F)
+            if [ "$chunk_end" \> "$END" ]; then chunk_end="$END"; fi
+
+            echo "---- Chunk $cur -> $chunk_end ----"
+            HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" -X POST \
+              "$BASE/functions/v1/sync-gx" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+              -H "Content-Type: application/json" \
+              -d "{\"startDate\": \"$cur\", \"endDate\": \"$chunk_end\"}" \
+              --max-time 300)
+
+            echo "HTTP status: $HTTP_CODE"
+            cat response.json | jq . 2>/dev/null || cat response.json
+
+            if [ "$HTTP_CODE" != "200" ] || ! jq -e '.success == true' response.json > /dev/null 2>&1; then
+              echo "::error::chunk $cur -> $chunk_end failed (HTTP $HTTP_CODE)"
+              FAILED=1
+            else
+              ITEMS=$(jq -r '.itemsReceived // 0' response.json)
+              GRAND_RESPONSES=$((GRAND_RESPONSES + ITEMS))
+            fi
+
+            cur=$(date -u -d "$chunk_end + 1 day" +%F)
+          done
+
+          echo "=================================="
+          echo "TOTAL GX responses synced: $GRAND_RESPONSES"
+          [ "$FAILED" = "0" ] || { echo "::error::one or more chunks failed"; exit 1; }
+          echo "Sync OK"
