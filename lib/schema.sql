@@ -120,6 +120,7 @@ CREATE TABLE insights (
 ALTER TABLE sites ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sales ENABLE ROW LEVEL SECURITY;
+ALTER TABLE gx_scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE incidents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE customer_feedback ENABLE ROW LEVEL SECURITY;
 ALTER TABLE kaizen ENABLE ROW LEVEL SECURITY;
@@ -143,6 +144,11 @@ CREATE POLICY "Sales readable by site members" ON sales FOR SELECT TO authentica
 );
 CREATE POLICY "Sales writable by managers" ON sales FOR INSERT TO authenticated WITH CHECK (
   EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND site_id = sales.site_id AND role IN ('admin', 'director', 'manager'))
+);
+
+-- GX Score: users can read for their site (writes come only from the sync-gx Edge Function via service role)
+CREATE POLICY "GX scores readable by site members" ON gx_scores FOR SELECT TO authenticated USING (
+  EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND site_id = gx_scores.site_id)
 );
 
 -- Incidents: site members can read and write
