@@ -4,8 +4,9 @@
 // Data:  GET  https://api.roller.app/reporting/revenue-entries?startDate&endDate&pageNumber
 //        Range capped at 1 day -> loop day-by-day. Rate limit ~1 req/sec.
 //
-// CA HT = sum of `netRevenue` across ALL entry types, per day.
-// Verified: 2026-05-30 sums to 12,130.87 EUR, matching Roller's "Revenu" dashboard exactly.
+// CA HT = sum of `netRevenue` across ALL entry types, bucketed by Roller's "business day"
+// (a shifted cutoff, not midnight Paris time — see BUSINESS_DAY_SHIFT_HOURS below).
+// Verified against Roller's "Revenu" dashboard across 10 days: matches to within ~0.3 EUR/day.
 //
 // POST body options:
 //   { "days": 30 }                                      -> last 30 days, sync to DB
@@ -21,6 +22,23 @@ const DAILY_TARGET = 10000
 const MAX_PAGES_PER_DAY = 20
 const RATE_LIMIT_MS = 1050
 const DAY_MS = 86400_000
+
+// Roller's "business day" doesn't reset at midnight Paris time — it resets a few
+// hours later (confirmed via businessDayShiftAnalysis: shiftHours 5-8 all match
+// Roller's reference daily totals to within ~0.3 EUR, vs. up to 380 EUR off at
+// midnight bucketing — the plateau means no entries land in that 5-8am window).
+const BUSINESS_DAY_SHIFT_HOURS = 6
+const parisDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Paris",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+})
+const businessDayOf = (recordDate: string): string => {
+  const d = new Date(recordDate)
+  d.setUTCHours(d.getUTCHours() - BUSINESS_DAY_SHIFT_HOURS)
+  return parisDateFormatter.format(d)
+}
 
 const DEBUG_FIELDS = [
   "netRevenue",
@@ -146,6 +164,10 @@ Deno.serve(async (req) => {
 
     const startDate = ymd(firstDay)
     const lastDateStr = ymd(lastDay)
+    // Business-day bucketing shifts early-morning entries (before the cutoff hour) back
+    // onto the previous business day. So the LAST business day's window also spans the
+    // first few hours of the following calendar day — fetch one extra day to capture it.
+    const fetchEndDateStr = ymd(new Date(lastDay.getTime() + DAY_MS))
 
     // Multi-day debug ranges blow past the Edge Function compute/memory limit (HTTP 546)
     // if we run the full heavy per-entry analysis (brute-force searches, bucketing
@@ -157,26 +179,24 @@ Deno.serve(async (req) => {
 
     const token = await getToken(clientId, clientSecret)
 
-    const byDay = new Map<string, number>()
     const debugDays: any[] = []
     const errors: string[] = []
     let entriesReceived = 0
-    // Accumulate every entry's (recordDate, netRevenue) across the whole range so we can
-    // re-bucket by alternate "business day" cutoff hours after the fetch loop (debug only).
-    const allEntriesForShiftAnalysis: { recordDate: string; netRevenue: number }[] = []
+    // Accumulate every entry's (recordDate, netRevenue) across the whole fetched range so
+    // we can bucket by Roller's actual "business day" (shifted cutoff, not midnight) once
+    // all pages are in — an entry queried under day N may belong to day N-1's business day.
+    const allEntries: { recordDate: string; netRevenue: number }[] = []
 
-    for (let cur = new Date(firstDay); ymd(cur) <= lastDateStr; cur = new Date(cur.getTime() + DAY_MS)) {
+    for (let cur = new Date(firstDay); ymd(cur) <= fetchEndDateStr; cur = new Date(cur.getTime() + DAY_MS)) {
       const dayStr = ymd(cur)
       try {
         const entries = await fetchDay(token, dayStr)
         entriesReceived += entries.length
 
-        if (debug) {
-          for (const e of entries) {
-            const rd = String(e.recordDate ?? e.transactionDate ?? "")
-            const net = Number(e.netRevenue ?? 0)
-            if (rd && !Number.isNaN(net)) allEntriesForShiftAnalysis.push({ recordDate: rd, netRevenue: net })
-          }
+        for (const e of entries) {
+          const rd = String(e.recordDate ?? e.transactionDate ?? "")
+          const net = Number(e.netRevenue ?? 0)
+          if (rd && !Number.isNaN(net)) allEntries.push({ recordDate: rd, netRevenue: net })
         }
 
         if (debug && liteDebug) {
@@ -331,17 +351,19 @@ Deno.serve(async (req) => {
             },
           })
         }
-
-        // CA HT = sum of netRevenue across ALL entry types
-        let dayTotal = 0
-        for (const e of entries) {
-          const net = Number(e.netRevenue ?? 0)
-          if (!Number.isNaN(net)) dayTotal += net
-        }
-        byDay.set(dayStr, dayTotal)
       } catch (e) {
         errors.push(String(e).slice(0, 200))
       }
+    }
+
+    // CA HT = sum of netRevenue across ALL entry types, bucketed by Roller's actual
+    // "business day" (shifted cutoff) rather than by the calendar day we queried —
+    // this is what makes our totals match Roller's "Revenu" figure exactly.
+    const byDay = new Map<string, number>()
+    for (const { recordDate, netRevenue } of allEntries) {
+      const day = businessDayOf(recordDate)
+      if (day < startDate || day > lastDateStr) continue
+      byDay.set(day, r2((byDay.get(day) ?? 0) + netRevenue))
     }
 
     // Re-bucket all collected entries using alternate "business day" cutoff hours
@@ -360,7 +382,7 @@ Deno.serve(async (req) => {
       const shiftResults: any[] = []
       for (const shiftHours of shiftHoursCandidates) {
         const byShiftedDay: Record<string, number> = {}
-        for (const { recordDate, netRevenue } of allEntriesForShiftAnalysis) {
+        for (const { recordDate, netRevenue } of allEntries) {
           const d = new Date(recordDate)
           d.setUTCHours(d.getUTCHours() - shiftHours)
           const dateStr = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(d)
