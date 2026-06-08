@@ -214,6 +214,35 @@ Deno.serve(async (req) => {
             }
           }
 
+          // Richer search: for each non-zero group, try contributing nothing, netRevenue,
+          // netRevenue+taxPayable, or netRevenue-taxPayable — looking for the exact mix
+          // Roller uses (e.g. gross vs net-of-tax per category).
+          const richGroups = Object.entries(byProduct)
+            .filter(([, v]) => v.netRevenue !== 0 || v.taxPayable !== 0)
+            .map(([key, v]) => ({
+              key,
+              variants: [
+                { label: "exclude", value: 0 },
+                { label: "net", value: v.netRevenue },
+                { label: "net+tax", value: r2(v.netRevenue + v.taxPayable) },
+                { label: "net-tax", value: r2(v.netRevenue - v.taxPayable) },
+              ],
+            }))
+          const richMatches: any[] = []
+          const tryCombo = (idx: number, sum: number, picks: { key: string; label: string; value: number }[]) => {
+            if (richMatches.length >= 5) return
+            if (idx === richGroups.length) {
+              if (Math.abs(r2(sum) - ROLLER_TARGET) < 0.02) {
+                richMatches.push(picks.filter((p) => p.label !== "exclude"))
+              }
+              return
+            }
+            for (const variant of richGroups[idx].variants) {
+              tryCombo(idx + 1, sum + variant.value, [...picks, { key: richGroups[idx].key, label: variant.label, value: variant.value }])
+            }
+          }
+          if (richGroups.length <= 8) tryCombo(0, 0, [])
+
           // Dump the first Recognition entry in full to inspect its dates and all numeric fields
           const firstRecognition = entries.find((e: any) => e?.entryType === "Recognition") ?? null
 
@@ -247,7 +276,7 @@ Deno.serve(async (req) => {
             entries: entries.length,
             byType: types,
             byProduct,
-            rollerTargetSearch: { target: ROLLER_TARGET, matchingSubsets },
+            rollerTargetSearch: { target: ROLLER_TARGET, matchingSubsets, richMatches },
             dateFields: dateFieldsFound,
             firstRecognitionEntry: firstRecognition,
             bucketingComparison: {
