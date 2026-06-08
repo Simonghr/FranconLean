@@ -183,6 +183,37 @@ Deno.serve(async (req) => {
               }
             }
           }
+          // Break down by productType within each entryType — looking for a category
+          // (gift cards, memberships, fees...) that Roller's "Revenu" treats differently.
+          const byProduct: Record<string, { count: number; netRevenue: number; taxPayable: number }> = {}
+          for (const e of entries) {
+            const key = `${e?.entryType ?? "Unknown"} / ${e?.productType ?? "Unknown"}`
+            const slot = (byProduct[key] ??= { count: 0, netRevenue: 0, taxPayable: 0 })
+            slot.count += 1
+            slot.netRevenue += Number(e.netRevenue ?? 0)
+            slot.taxPayable += Number(e.taxPayable ?? 0)
+          }
+          for (const k of Object.keys(byProduct)) {
+            byProduct[k].netRevenue = r2(byProduct[k].netRevenue)
+            byProduct[k].taxPayable = r2(byProduct[k].taxPayable)
+          }
+
+          // Brute-force subset-sum search over the (entryType x productType) group totals:
+          // find which combination of groups' netRevenue sums to Roller's displayed figure.
+          const ROLLER_TARGET = 651.77
+          const groupEntries = Object.entries(byProduct).map(([key, v]) => ({ key, net: v.netRevenue }))
+          const matchingSubsets: string[][] = []
+          const n = groupEntries.length
+          if (n <= 22) {
+            for (let mask = 1; mask < (1 << n) && matchingSubsets.length < 5; mask++) {
+              let sum = 0
+              for (let i = 0; i < n; i++) if (mask & (1 << i)) sum += groupEntries[i].net
+              if (Math.abs(r2(sum) - ROLLER_TARGET) < 0.02) {
+                matchingSubsets.push(groupEntries.filter((_, i) => mask & (1 << i)).map((g) => g.key))
+              }
+            }
+          }
+
           // Dump the first Recognition entry in full to inspect its dates and all numeric fields
           const firstRecognition = entries.find((e: any) => e?.entryType === "Recognition") ?? null
 
@@ -215,6 +246,8 @@ Deno.serve(async (req) => {
             date: dayStr,
             entries: entries.length,
             byType: types,
+            byProduct,
+            rollerTargetSearch: { target: ROLLER_TARGET, matchingSubsets },
             dateFields: dateFieldsFound,
             firstRecognitionEntry: firstRecognition,
             bucketingComparison: {
