@@ -1,15 +1,17 @@
 // ROLLER -> FranconLean Guest Experience (GX) score sync.
 //
 // Auth:  POST https://api.roller.app/token  (JSON body {client_id, client_secret})
-// Data:  GET  https://api.roller.app/reporting/gx-score-responses?...&pageNumber
-//        (Roller's "GX Score" is an NPS-like guest-survey metric, scaled -100..+100,
-//        built from individual survey responses — we aggregate the daily average here.)
+// Data:  GET  https://api.roller.app/reporting/gxs?startDate&endDate&pageNumber&pageSize
+//        Range: endDate must be startDate +1 day -> loop day-by-day, like revenue-entries.
 //
-// NOTE: Roller's exact response field names for this endpoint aren't in our codebase yet
-// (the API docs page requires a logged-in Roller account). This function therefore starts
-// in DEBUG mode: it dumps the raw first page so we can see real field names, then we wire
-// up the aggregation against the confirmed shape — same iterative process used to build
-// sync-roller (whose CA figures now match Roller's dashboard to within a few cents).
+// Roller's GX Score is an NPS-style metric (-100..+100). Each survey response carries
+// `isFan` (overallRating 4-5) or `isCritic` (overallRating 1-3) — there's no neutral
+// bucket. The aggregate score for a period is:
+//   GX score = (fanCount - criticCount) / totalResponses * 100
+// We bucket responses by `createdDate` (when the survey was sent to the guest, i.e.
+// closest to their visit date) — Roller filters the date-range query by `modifiedDate`,
+// so we may pull in a few extra/missing edge responses near range boundaries; acceptable
+// for a daily aggregate metric (unlike CA, this isn't a cents-precision figure).
 //
 // POST body options:
 //   { "debug": true }                                   -> dumps raw API response, no DB write
@@ -21,33 +23,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 const ROLLER_BASE = "https://api.roller.app"
 const SITE_ID = "00000000-0000-0000-0000-000000000001"
 const DEFAULT_DAYS = 30
-const MAX_PAGES = 20
+const MAX_PAGES_PER_DAY = 10
 const RATE_LIMIT_MS = 1050
 const DAY_MS = 86400_000
 
-// Best-guess endpoint path, following the same naming convention as the confirmed
-// `/reporting/revenue-entries` Data API endpoint. /reporting/gx-score-responses
-// returned 404 — try several plausible alternatives in debug mode and report which
-// one (if any) responds with data, since Roller's docs page is behind a login wall.
-const GX_ENDPOINT_CANDIDATES = [
-  "/reporting/gx-score-responses",
-  "/reporting/gx-score",
-  "/reporting/guest-experience-score-responses",
-  "/data/gx-score-responses",
-  "/gx-score-responses",
-  "/gx/responses",
-  "/guest-experience/responses",
-  "/guest-experience/gx-score-responses",
-  "/surveys/gx-score-responses",
-  "/surveys/responses",
-  "/feedback/gx-score-responses",
-]
-const GX_ENDPOINT_PATH = GX_ENDPOINT_CANDIDATES[0]
-
-// Candidate field names for the survey's numeric score and its date — Roller's exact
-// schema isn't confirmed yet, so we try the most likely candidates defensively.
-const SCORE_FIELDS = ["score", "gxScore", "npsScore", "rating", "responseScore"]
-const DATE_FIELDS = ["responseDate", "modifiedDate", "surveyDate", "date", "createdDate", "submittedDate"]
+const GX_ENDPOINT_PATH = "/reporting/gxs"
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -75,28 +55,40 @@ function extractItems(parsed: unknown): any[] {
   if (Array.isArray(parsed)) return parsed
   if (parsed && typeof parsed === "object") {
     const o = parsed as Record<string, unknown>
-    for (const key of ["data", "items", "results", "responses", "gxScoreResponses"]) {
+    for (const key of ["data", "items", "results", "responses", "gxsResponses"]) {
       if (Array.isArray(o[key])) return o[key] as any[]
     }
   }
   return []
 }
 
-function firstDefined(obj: any, fields: string[]): { field: string; value: unknown } | null {
-  for (const f of fields) {
-    if (obj?.[f] !== undefined && obj[f] !== null) return { field: f, value: obj[f] }
+async function getPage(token: string, dayStart: string, dayEnd: string, page: number) {
+  const url = `${ROLLER_BASE}${GX_ENDPOINT_PATH}?startDate=${dayStart}&endDate=${dayEnd}&pageNumber=${page}&pageSize=100`
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    })
+    if (res.status === 429) {
+      await sleep(2000)
+      continue
+    }
+    const text = await res.text()
+    if (!res.ok) throw new Error(`${dayStart}: ${res.status} - ${text.slice(0, 200)}`)
+    return extractItems(JSON.parse(text))
   }
-  return null
+  throw new Error(`${dayStart}: rate limited (429) after retry`)
 }
 
-async function fetchPage(token: string, startDate: string, endDate: string, page: number) {
-  const url = `${ROLLER_BASE}${GX_ENDPOINT_PATH}?startDate=${startDate}&endDate=${endDate}&pageNumber=${page}`
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-  })
-  const text = await res.text()
-  if (!res.ok) throw new Error(`${url}: ${res.status} - ${text.slice(0, 300)}`)
-  return { url, items: extractItems(JSON.parse(text)), raw: text }
+async function fetchDay(token: string, dayStart: string) {
+  const dayEnd = ymd(new Date(new Date(dayStart).getTime() + DAY_MS))
+  const all: any[] = []
+  for (let page = 1; page <= MAX_PAGES_PER_DAY; page++) {
+    await sleep(RATE_LIMIT_MS)
+    const items = await getPage(token, dayStart, dayEnd, page)
+    all.push(...items)
+    if (items.length === 0) break
+  }
+  return all
 }
 
 Deno.serve(async (req) => {
@@ -132,56 +124,23 @@ Deno.serve(async (req) => {
     const token = await getToken(clientId, clientSecret)
 
     if (debug) {
-      // DEBUG: try each candidate endpoint path until one returns data (or all fail),
-      // so we can confirm the real route + field names before wiring up aggregation.
-      const attempts: any[] = []
-      let found: { path: string; url: string; items: any[]; raw: string } | null = null
-      for (const path of GX_ENDPOINT_CANDIDATES) {
-        await sleep(RATE_LIMIT_MS)
-        const url = `${ROLLER_BASE}${path}?startDate=${startDate}&endDate=${lastDateStr}&pageNumber=1`
-        try {
-          const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } })
-          const text = await res.text()
-          if (!res.ok) {
-            attempts.push({ path, status: res.status, body: text.slice(0, 200) })
-            continue
-          }
-          const items = extractItems(JSON.parse(text))
-          attempts.push({ path, status: res.status, itemCount: items.length })
-          if (!found) found = { path, url, items, raw: text }
-        } catch (e) {
-          attempts.push({ path, error: String(e).slice(0, 200) })
-        }
-      }
-
-      if (!found) {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            mode: "debug",
-            error: "None of the candidate GX endpoint paths returned a successful response.",
-            attempts,
-            hint: "Check Roller's Data API docs (logged in) for the exact 'Get GX score responses' route, then update GX_ENDPOINT_CANDIDATES in sync-gx/index.ts.",
-          }, null, 2),
-          { headers: { ...cors, "Content-Type": "application/json" } }
-        )
-      }
-
-      const sample = found.items[0] ?? null
+      // DEBUG: fetch a single day and dump raw responses, no DB write.
+      const items = await fetchDay(token, startDate)
+      const sample = items[0] ?? null
+      const fans = items.filter((r: any) => r?.isFan === true).length
+      const critics = items.filter((r: any) => r?.isCritic === true).length
       return new Response(
         JSON.stringify(
           {
             success: true,
             mode: "debug",
-            endpointFound: found.path,
-            endpointTried: found.url,
-            attempts,
-            itemCount: found.items.length,
+            dayQueried: startDate,
+            itemCount: items.length,
+            fans,
+            critics,
+            computedScoreForDay: items.length ? r2(((fans - critics) / items.length) * 100) : null,
             firstItemFields: sample ? Object.keys(sample) : [],
             firstItem: sample,
-            detectedScoreField: sample ? firstDefined(sample, SCORE_FIELDS) : null,
-            detectedDateField: sample ? firstDefined(sample, DATE_FIELDS) : null,
-            rawSnippet: found.raw.slice(0, 4000),
           },
           null,
           2
@@ -190,44 +149,38 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Normal mode: paginate through the range, aggregate score per day, upsert to DB.
-    const byDay = new Map<string, { sum: number; count: number }>()
+    // Normal mode: paginate through the range day-by-day, aggregate fan/critic counts
+    // per day (bucketed by createdDate), compute the NPS-style GX score, upsert to DB.
+    const byDay = new Map<string, { fans: number; critics: number; total: number }>()
     const errors: string[] = []
     let itemsReceived = 0
 
-    for (let page = 1; page <= MAX_PAGES; page++) {
-      await sleep(RATE_LIMIT_MS)
-      let items: any[]
+    for (let cur = new Date(firstDay); ymd(cur) <= lastDateStr; cur = new Date(cur.getTime() + DAY_MS)) {
+      const dayStr = ymd(cur)
       try {
-        ;({ items } = await fetchPage(token, startDate, lastDateStr, page))
+        const items = await fetchDay(token, dayStr)
+        itemsReceived += items.length
+        for (const item of items) {
+          const created = String(item?.createdDate ?? item?.modifiedDate ?? "")
+          const day = created.split("T")[0]
+          if (!day || day < startDate || day > lastDateStr) continue
+          const slot = byDay.get(day) ?? { fans: 0, critics: 0, total: 0 }
+          slot.total += 1
+          if (item?.isFan === true) slot.fans += 1
+          else if (item?.isCritic === true) slot.critics += 1
+          byDay.set(day, slot)
+        }
       } catch (e) {
         errors.push(String(e).slice(0, 200))
-        break
-      }
-      if (items.length === 0) break
-      itemsReceived += items.length
-
-      for (const item of items) {
-        const scoreHit = firstDefined(item, SCORE_FIELDS)
-        const dateHit = firstDefined(item, DATE_FIELDS)
-        if (!scoreHit || !dateHit) continue
-        const score = Number(scoreHit.value)
-        if (Number.isNaN(score)) continue
-        const day = String(dateHit.value).split("T")[0]
-        if (day < startDate || day > lastDateStr) continue
-        const slot = byDay.get(day) ?? { sum: 0, count: 0 }
-        slot.sum += score
-        slot.count += 1
-        byDay.set(day, slot)
       }
     }
 
     const rows = [...byDay.entries()]
-      .map(([date, { sum, count }]) => ({
+      .map(([date, { fans, critics, total }]) => ({
         site_id: SITE_ID,
         date,
-        score: r2(sum / count),
-        responses_count: count,
+        score: total ? r2(((fans - critics) / total) * 100) : 0,
+        responses_count: total,
         period: "day",
       }))
       .sort((a, b) => a.date.localeCompare(b.date))
