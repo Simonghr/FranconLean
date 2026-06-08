@@ -198,6 +198,24 @@ Deno.serve(async (req) => {
             byProduct[k].taxPayable = r2(byProduct[k].taxPayable)
           }
 
+          // ROLLER's recognition entries are triggered either by REDEMPTION (guest used the
+          // ticket -> redeemedQuantity > 0) or EXPIRATION (ticket lapsed unused -> expiredQuantity > 0).
+          // Hypothesis: the dashboard "Revenu" counts only one of these triggers.
+          const trigger = { redemption: { count: 0, netRevenue: 0, taxPayable: 0 }, expiration: { count: 0, netRevenue: 0, taxPayable: 0 }, neither: { count: 0, netRevenue: 0, taxPayable: 0 } }
+          for (const e of entries) {
+            if (e?.entryType !== "Recognition" && e?.entryType !== "Adjustment") continue
+            const redeemed = Number(e.redeemedQuantity ?? 0) > 0
+            const expired = Number(e.expiredQuantity ?? 0) > 0
+            const slot = redeemed ? trigger.redemption : expired ? trigger.expiration : trigger.neither
+            slot.count++
+            slot.netRevenue += Number(e.netRevenue ?? 0)
+            slot.taxPayable += Number(e.taxPayable ?? 0)
+          }
+          for (const k of Object.keys(trigger) as (keyof typeof trigger)[]) {
+            trigger[k].netRevenue = r2(trigger[k].netRevenue)
+            trigger[k].taxPayable = r2(trigger[k].taxPayable)
+          }
+
           // Brute-force subset-sum search over the (entryType x productType) group totals:
           // find which combination of groups' netRevenue sums to Roller's displayed figure.
           const ROLLER_TARGET = 651.77
@@ -276,6 +294,7 @@ Deno.serve(async (req) => {
             entries: entries.length,
             byType: types,
             byProduct,
+            byTrigger: trigger,
             rollerTargetSearch: { target: ROLLER_TARGET, matchingSubsets, richMatches },
             dateFields: dateFieldsFound,
             firstRecognitionEntry: firstRecognition,
