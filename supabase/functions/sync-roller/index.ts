@@ -185,12 +185,44 @@ Deno.serve(async (req) => {
           }
           // Dump the first Recognition entry in full to inspect its dates and all numeric fields
           const firstRecognition = entries.find((e: any) => e?.entryType === "Recognition") ?? null
+
+          // Compare bucketing strategies: query-day vs UTC-date(recordDate) vs Paris-local-date(recordDate)
+          const parisDate = (iso: string) =>
+            new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso))
+          let sumQueryDay = 0
+          let sumUtcMatch = 0, sumUtcMismatch = 0, countUtcMismatch = 0
+          let sumParisMatch = 0, sumParisMismatch = 0, countParisMismatch = 0
+          const mismatchSamples: any[] = []
+          for (const e of entries) {
+            const net = Number(e.netRevenue ?? 0)
+            if (Number.isNaN(net)) continue
+            sumQueryDay += net
+            const rd = String(e.recordDate ?? e.transactionDate ?? "")
+            const utcDate = rd.split("T")[0]
+            const pDate = rd ? parisDate(rd) : ""
+            if (utcDate === dayStr) sumUtcMatch += net
+            else { sumUtcMismatch += net; countUtcMismatch++ }
+            if (pDate === dayStr) sumParisMatch += net
+            else {
+              sumParisMismatch += net
+              countParisMismatch++
+              if (mismatchSamples.length < 5) {
+                mismatchSamples.push({ entryType: e.entryType, recordDate: rd, utcDate, parisDate: pDate, netRevenue: net })
+              }
+            }
+          }
           debugDays.push({
             date: dayStr,
             entries: entries.length,
             byType: types,
             dateFields: dateFieldsFound,
             firstRecognitionEntry: firstRecognition,
+            bucketingComparison: {
+              sumQueryDay: r2(sumQueryDay),
+              byUtcDate: { matchingDay: r2(sumUtcMatch), otherDays: r2(sumUtcMismatch), countOtherDays: countUtcMismatch },
+              byParisLocalDate: { matchingDay: r2(sumParisMatch), otherDays: r2(sumParisMismatch), countOtherDays: countParisMismatch },
+              parisMismatchSamples: mismatchSamples,
+            },
           })
         }
 
