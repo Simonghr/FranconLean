@@ -26,8 +26,23 @@ const RATE_LIMIT_MS = 1050
 const DAY_MS = 86400_000
 
 // Best-guess endpoint path, following the same naming convention as the confirmed
-// `/reporting/revenue-entries` Data API endpoint. Adjust here if Roller responds 404.
-const GX_ENDPOINT_PATH = "/reporting/gx-score-responses"
+// `/reporting/revenue-entries` Data API endpoint. /reporting/gx-score-responses
+// returned 404 — try several plausible alternatives in debug mode and report which
+// one (if any) responds with data, since Roller's docs page is behind a login wall.
+const GX_ENDPOINT_CANDIDATES = [
+  "/reporting/gx-score-responses",
+  "/reporting/gx-score",
+  "/reporting/guest-experience-score-responses",
+  "/data/gx-score-responses",
+  "/gx-score-responses",
+  "/gx/responses",
+  "/guest-experience/responses",
+  "/guest-experience/gx-score-responses",
+  "/surveys/gx-score-responses",
+  "/surveys/responses",
+  "/feedback/gx-score-responses",
+]
+const GX_ENDPOINT_PATH = GX_ENDPOINT_CANDIDATES[0]
 
 // Candidate field names for the survey's numeric score and its date — Roller's exact
 // schema isn't confirmed yet, so we try the most likely candidates defensively.
@@ -117,41 +132,62 @@ Deno.serve(async (req) => {
     const token = await getToken(clientId, clientSecret)
 
     if (debug) {
-      // DEBUG: just fetch page 1 and dump it raw so we can confirm the endpoint path
-      // and the real field names before wiring up aggregation.
-      try {
-        const { url, items, raw } = await fetchPage(token, startDate, lastDateStr, 1)
-        const sample = items[0] ?? null
-        return new Response(
-          JSON.stringify(
-            {
-              success: true,
-              mode: "debug",
-              endpointTried: url,
-              itemCount: items.length,
-              firstItemFields: sample ? Object.keys(sample) : [],
-              firstItem: sample,
-              detectedScoreField: sample ? firstDefined(sample, SCORE_FIELDS) : null,
-              detectedDateField: sample ? firstDefined(sample, DATE_FIELDS) : null,
-              rawSnippet: raw.slice(0, 4000),
-            },
-            null,
-            2
-          ),
-          { headers: { ...cors, "Content-Type": "application/json" } }
-        )
-      } catch (e) {
+      // DEBUG: try each candidate endpoint path until one returns data (or all fail),
+      // so we can confirm the real route + field names before wiring up aggregation.
+      const attempts: any[] = []
+      let found: { path: string; url: string; items: any[]; raw: string } | null = null
+      for (const path of GX_ENDPOINT_CANDIDATES) {
+        await sleep(RATE_LIMIT_MS)
+        const url = `${ROLLER_BASE}${path}?startDate=${startDate}&endDate=${lastDateStr}&pageNumber=1`
+        try {
+          const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } })
+          const text = await res.text()
+          if (!res.ok) {
+            attempts.push({ path, status: res.status, body: text.slice(0, 200) })
+            continue
+          }
+          const items = extractItems(JSON.parse(text))
+          attempts.push({ path, status: res.status, itemCount: items.length })
+          if (!found) found = { path, url, items, raw: text }
+        } catch (e) {
+          attempts.push({ path, error: String(e).slice(0, 200) })
+        }
+      }
+
+      if (!found) {
         return new Response(
           JSON.stringify({
             success: false,
             mode: "debug",
-            endpointTried: `${ROLLER_BASE}${GX_ENDPOINT_PATH}`,
-            error: String(e).slice(0, 500),
-            hint: "If this is a 404, the endpoint path GX_ENDPOINT_PATH in sync-gx/index.ts needs adjusting to match Roller's actual Data API route.",
-          }),
+            error: "None of the candidate GX endpoint paths returned a successful response.",
+            attempts,
+            hint: "Check Roller's Data API docs (logged in) for the exact 'Get GX score responses' route, then update GX_ENDPOINT_CANDIDATES in sync-gx/index.ts.",
+          }, null, 2),
           { headers: { ...cors, "Content-Type": "application/json" } }
         )
       }
+
+      const sample = found.items[0] ?? null
+      return new Response(
+        JSON.stringify(
+          {
+            success: true,
+            mode: "debug",
+            endpointFound: found.path,
+            endpointTried: found.url,
+            attempts,
+            itemCount: found.items.length,
+            firstItemFields: sample ? Object.keys(sample) : [],
+            firstItem: sample,
+            detectedScoreField: sample ? firstDefined(sample, SCORE_FIELDS) : null,
+            detectedDateField: sample ? firstDefined(sample, DATE_FIELDS) : null,
+            rawSnippet: found.raw.slice(0, 4000),
+          },
+          null,
+          2
+        ),
+        { headers: { ...cors, "Content-Type": "application/json" } }
+      )
     }
 
     // Normal mode: paginate through the range, aggregate score per day, upsert to DB.
