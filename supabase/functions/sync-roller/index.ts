@@ -147,6 +147,14 @@ Deno.serve(async (req) => {
     const startDate = ymd(firstDay)
     const lastDateStr = ymd(lastDay)
 
+    // Multi-day debug ranges blow past the Edge Function compute/memory limit (HTTP 546)
+    // if we run the full heavy per-entry analysis (brute-force searches, bucketing
+    // comparison, byProduct/byTrigger breakdowns) for every day. Beyond a couple of
+    // days, switch to "lite" debug: only collect the minimal (recordDate, netRevenue)
+    // pairs needed for businessDayShiftAnalysis, plus a tiny per-day summary.
+    const rangeDays = Math.round((lastDay.getTime() - firstDay.getTime()) / DAY_MS) + 1
+    const liteDebug = debug && rangeDays > 3
+
     const token = await getToken(clientId, clientSecret)
 
     const byDay = new Map<string, number>()
@@ -171,7 +179,13 @@ Deno.serve(async (req) => {
           }
         }
 
-        if (debug) {
+        if (debug && liteDebug) {
+          let dayNetSum = 0
+          for (const e of entries) dayNetSum += Number(e.netRevenue ?? 0)
+          debugDays.push({ date: dayStr, entries: entries.length, sumNetRevenue: r2(dayNetSum) })
+        }
+
+        if (debug && !liteDebug) {
           const types: Record<string, any> = {}
           for (const e of entries) {
             const t = String(e?.entryType ?? "Unknown")
@@ -377,7 +391,18 @@ Deno.serve(async (req) => {
     if (debug) {
       return new Response(
         JSON.stringify(
-          { success: true, mode: "debug", dateRange: { startDate, endDate: lastDateStr }, entriesReceived, businessDayShiftAnalysis, debugDays, errors: errors.length ? errors : undefined },
+          {
+            success: true,
+            mode: liteDebug ? "debug-lite" : "debug",
+            note: liteDebug
+              ? "Range > 3 days: heavy per-entry analysis (brute-force searches, bucketing comparison) skipped to stay within compute limits. debugDays only has per-day entry counts + net sums."
+              : undefined,
+            dateRange: { startDate, endDate: lastDateStr },
+            entriesReceived,
+            businessDayShiftAnalysis,
+            debugDays,
+            errors: errors.length ? errors : undefined,
+          },
           null,
           2
         ),
