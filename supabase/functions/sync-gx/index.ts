@@ -174,22 +174,18 @@ Deno.serve(async (req) => {
           else if (item?.isCritic === true) slot.critics += 1
           byDay.set(day, slot)
 
-          // Capture individual review if there's a comment
-          const comment = item?.comment ?? item?.comments ?? item?.reviewComment ?? item?.feedback ?? item?.guestComment ?? null
-          const guestName = [item?.firstName, item?.lastName].filter(Boolean).join(" ")
-            || item?.guestName || item?.name || item?.customerName || null
-          const rollerId = String(item?.id ?? item?.gxsId ?? item?.responseId ?? "")
-
+          // Capture individual review
+          const rollerId = String(item?.gxsResponseId ?? "")
           if (rollerId) {
             reviewRows.push({
               site_id: SITE_ID,
               date: day,
               roller_id: rollerId,
-              guest_name: guestName || null,
-              overall_rating: item?.overallRating ?? item?.rating ?? null,
+              guest_name: null,
+              overall_rating: item?.overallRating ?? null,
               is_fan: item?.isFan === true,
               is_critic: item?.isCritic === true,
-              comment: comment && String(comment).trim() ? String(comment).trim() : null,
+              comment: null, // comments not available in /reporting/gxs — needs detail endpoint
             })
           }
         }
