@@ -79,9 +79,10 @@ export default function DashboardPage() {
     load()
   }, [])
 
-  const todaySale = sales[sales.length - 1]
+  const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" })
+  const todaySale = sales.find(s => s.date === todayStr)
   const caToday = Math.round(todaySale?.amount ?? 0)
-  const caTarget = Math.round(todaySale?.target ?? 0)
+  const caTarget = Math.round(todaySale?.target ?? 10000)
   const caTrend = caTarget > 0 ? Math.round(((caToday - caTarget) / caTarget) * 100) : 0
 
 // Roller's GX Score formula: round each percentage separately before subtracting.
