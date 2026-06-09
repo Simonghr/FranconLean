@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { RefreshCw, Lightbulb, Plus, Pencil, Trash2, ArrowRight, ChevronRight, CheckCircle2 } from "lucide-react"
 import { format } from "date-fns"
@@ -67,6 +67,14 @@ const blankKaizen = (): KaizenFormState => ({ description: "", estimated_gain: "
 // ── Component ────────────────────────────────────────────────────────────────
 
 export default function LeanPage() {
+  return (
+    <Suspense>
+      <LeanPageInner />
+    </Suspense>
+  )
+}
+
+function LeanPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
