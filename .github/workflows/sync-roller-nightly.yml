@@ -2,11 +2,9 @@ name: Sync Roller Revenue
 
 on:
   schedule:
-    # Every 3 hours — keeps the last 7 days continuously refreshed so our
-    # numbers converge to Roller's "Revenu" figure as it settles (Roller's
-    # own dashboard keeps recalculating recent days for ~5-6 days after the
-    # fact, due to revenue-recognition processing lag on their side).
-    - cron: "0 */3 * * *"
+    # Every hour — keeps today's CA up to date throughout the day, and
+    # keeps the last 7 days refreshed as Roller's revenue figures settle.
+    - cron: "0 * * * *"
   workflow_dispatch:
     inputs:
       days:
