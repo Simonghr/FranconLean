@@ -105,15 +105,16 @@ export default function DashboardPage() {
 
         const { data } = await import('@/lib/supabase').then(m =>
           m.supabase.from('bookings')
-            .select('booking_date, quantity')
+            .select('booking_date, roller_booking_id')
             .eq('site_id', SITE_ID)
             .eq('is_anniversary', true)
             .in('booking_date', [satStr, sunStr])
         )
         const rows = data ?? []
+        const uniq = (date: string) => new Set(rows.filter((r: any) => r.booking_date === date).map((r: any) => r.roller_booking_id)).size
         setAnniversaires({
-          sat: rows.filter((r: any) => r.booking_date === satStr).reduce((s: number, r: any) => s + (r.quantity ?? 1), 0),
-          sun: rows.filter((r: any) => r.booking_date === sunStr).reduce((s: number, r: any) => s + (r.quantity ?? 1), 0),
+          sat: uniq(satStr),
+          sun: uniq(sunStr),
           satStr,
           sunStr,
         })
@@ -302,11 +303,11 @@ const gxCalc = (fans: number, critics: number, total: number) =>
           ) : (
             <div className="space-y-1">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400">Sam {anniversaires.satStr.slice(5).replace("-", "/")}</span>
+                <span className="text-xs text-slate-400">Sam {anniversaires.satStr.slice(8)}/{anniversaires.satStr.slice(5,7)}</span>
                 <span className="text-xl font-bold text-pink-400">{anniversaires.sat}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-slate-400">Dim {anniversaires.sunStr.slice(5).replace("-", "/")}</span>
+                <span className="text-xs text-slate-400">Dim {anniversaires.sunStr.slice(8)}/{anniversaires.sunStr.slice(5,7)}</span>
                 <span className="text-xl font-bold text-pink-400">{anniversaires.sun}</span>
               </div>
             </div>
