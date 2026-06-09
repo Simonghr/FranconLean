@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Plus, Search, AlertTriangle, Pencil, ArrowRight, MapPin, Clock, User, Trash2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { Plus, Search, AlertTriangle, Pencil, ArrowRight, MapPin, Clock, User, Trash2, RefreshCw } from "lucide-react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { Badge } from "@/components/ui/badge"
@@ -172,6 +173,7 @@ function IncidentForm({ form, onChange }: { form: FormState; onChange: (f: FormS
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export default function IncidentsPage() {
+  const router = useRouter()
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -264,6 +266,15 @@ export default function IncidentsPage() {
       await incidentsRepo.remove(inc.id)
       setIncidents(prev => prev.filter(i => i.id !== inc.id))
     } catch (err) { console.error(err) }
+  }
+
+  const handleToPdca = (inc: Incident) => {
+    const params = new URLSearchParams({
+      problem: inc.description,
+      origin_label: `Incident du ${format(new Date(inc.occurred_at ?? inc.created_at), "dd/MM/yyyy", { locale: fr })}${inc.zone ? ` (${zoneLabels[inc.zone as IncidentZone] ?? inc.zone})` : ""}`,
+      origin_id: inc.id,
+    })
+    router.push(`/lean?${params.toString()}`)
   }
 
   const handleStatusChange = async (inc: Incident, status: IncidentStatus) => {
@@ -482,6 +493,14 @@ export default function IncidentsPage() {
                             <ArrowRight className="w-3.5 h-3.5" />
                           </Button>
                         )}
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-7 px-2 text-xs text-blue-500 hover:text-blue-300 flex items-center gap-1"
+                          onClick={() => handleToPdca(inc)}
+                          title="Traiter en PDCA"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </Button>
                       </div>
                     </td>
                   </tr>
