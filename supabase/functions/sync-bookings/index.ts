@@ -13,6 +13,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 const ROLLER_BASE = "https://api.roller.app"
 const SITE_ID = "00000000-0000-0000-0000-000000000001"
 const DEFAULT_DAYS = 14
+const ANNIVERSARY_PRODUCT_IDS = new Set(["1219385", "1219387", "1224203"])
 const RATE_LIMIT_MS = 1050
 const DAY_MS = 86400_000
 
@@ -153,7 +154,7 @@ Deno.serve(async (req) => {
           product_id: String(item?.productId ?? ""),
           quantity: item?.quantity ?? 1,
           status: b?.status ?? null,
-          is_anniversary: productName.toLowerCase().includes("anniv"),
+          is_anniversary: ANNIVERSARY_PRODUCT_IDS.has(String(item?.productId ?? "")),
         })
       }
     }
