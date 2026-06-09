@@ -65,7 +65,7 @@ export default function GxScorePage() {
     Promise.all([
       feedbackRepo.getAll(SITE_ID),
       gxRepo.getAll(SITE_ID),
-      gxReviewsRepo.getWithComments(SITE_ID),
+      gxReviewsRepo.getRecent(SITE_ID),
     ])
       .then(([fb, gx, rev]) => { setFeedbacks(fb); setGxScores(gx); setReviews(rev) })
       .catch(console.error)
@@ -214,7 +214,7 @@ export default function GxScorePage() {
       {/* GX Evolution chart */}
       <GxChart scores={gxScores} title="Évolution GX Score (30 derniers jours)" />
 
-      {/* Roller reviews with comments */}
+      {/* Roller reviews */}
       {reviews.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-4">
@@ -222,34 +222,55 @@ export default function GxScorePage() {
               <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
               Avis clients Roller
             </h2>
-            <span className="text-xs text-slate-500">{reviews.length} avec commentaire</span>
+            <span className="text-xs text-slate-500">{reviews.length} avis récents</span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {reviews.map(r => {
-              const stars = r.overall_rating ?? (r.is_fan ? 5 : r.is_critic ? 2 : 3)
+              const overallStars = r.overall_rating ?? (r.is_fan ? 5 : r.is_critic ? 2 : 3)
               const color = r.is_fan ? "border-green-500/30 bg-green-500/5" : r.is_critic ? "border-red-500/30 bg-red-500/5" : "border-slate-700"
               return (
                 <div key={r.id} className={`bg-slate-800 border ${color} rounded-xl p-4 space-y-3`}>
                   <div className="flex items-start justify-between gap-2">
-                    <div>
-                      {r.guest_name && (
-                        <p className="text-sm font-semibold text-white">{r.guest_name}</p>
-                      )}
-                      <div className="flex items-center gap-0.5 mt-1">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <Star key={i} className={`w-3.5 h-3.5 ${i < stars ? "text-amber-400 fill-amber-400" : "text-slate-600"}`} />
-                        ))}
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1.5">
+                        {r.is_fan
+                          ? <span className="text-xs font-semibold text-green-400 flex items-center gap-1"><ThumbsUp className="w-3 h-3" /> Fan</span>
+                          : r.is_critic
+                          ? <span className="text-xs font-semibold text-red-400 flex items-center gap-1"><ThumbsDown className="w-3 h-3" /> Critique</span>
+                          : null
+                        }
                       </div>
+                      <div className="flex items-center gap-0.5">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <Star key={i} className={`w-3.5 h-3.5 ${i < overallStars ? "text-amber-400 fill-amber-400" : "text-slate-600"}`} />
+                        ))}
+                        <span className="text-xs text-slate-500 ml-1">Expérience</span>
+                      </div>
+                      {r.service_rating != null && (
+                        <div className="flex items-center gap-0.5">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star key={i} className={`w-3.5 h-3.5 ${i < r.service_rating! ? "text-blue-400 fill-blue-400" : "text-slate-600"}`} />
+                          ))}
+                          <span className="text-xs text-slate-500 ml-1">Service</span>
+                        </div>
+                      )}
                     </div>
                     <span className="text-xs text-slate-500 shrink-0">
                       {format(new Date(r.date), "dd/MM/yyyy", { locale: fr })}
                     </span>
                   </div>
-                  <p className="text-sm text-slate-200 leading-relaxed">"{r.comment}"</p>
-                  <div className="flex items-center gap-2">
-                    {r.is_fan && <span className="text-xs text-green-400 flex items-center gap-1"><ThumbsUp className="w-3 h-3" /> Fan</span>}
-                    {r.is_critic && <span className="text-xs text-red-400 flex items-center gap-1"><ThumbsDown className="w-3 h-3" /> Critique</span>}
-                  </div>
+                  {r.service_rating_reasons && r.service_rating_reasons.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {r.service_rating_reasons.map((reason, i) => (
+                        <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 border border-slate-600">
+                          {reason}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {r.comment && (
+                    <p className="text-sm text-slate-200 leading-relaxed">"{r.comment}"</p>
+                  )}
                 </div>
               )
             })}

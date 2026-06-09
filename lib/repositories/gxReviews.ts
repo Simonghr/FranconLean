@@ -7,6 +7,8 @@ export interface GxReview {
   roller_id: string
   guest_name?: string
   overall_rating?: number
+  service_rating?: number
+  service_rating_reasons?: string[]
   is_fan: boolean
   is_critic: boolean
   comment?: string
@@ -24,12 +26,11 @@ export async function getAll(site_id: string, limit = 100): Promise<GxReview[]> 
   return data as GxReview[]
 }
 
-export async function getWithComments(site_id: string, limit = 50): Promise<GxReview[]> {
+export async function getRecent(site_id: string, limit = 50): Promise<GxReview[]> {
   const { data, error } = await supabase
     .from('gx_reviews')
     .select('*')
     .eq('site_id', site_id)
-    .not('comment', 'is', null)
     .order('date', { ascending: false })
     .limit(limit)
   if (error) throw error

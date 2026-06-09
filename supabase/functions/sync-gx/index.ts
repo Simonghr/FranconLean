@@ -200,9 +200,11 @@ Deno.serve(async (req) => {
               roller_id: rollerId,
               guest_name: null,
               overall_rating: item?.overallRating ?? null,
+              service_rating: item?.serviceRating ?? null,
+              service_rating_reasons: item?.serviceRatingReasons ?? null,
               is_fan: item?.isFan === true,
               is_critic: item?.isCritic === true,
-              comment: null, // comments not available in /reporting/gxs — needs detail endpoint
+              comment: null,
             })
           }
         }
