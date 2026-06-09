@@ -103,20 +103,6 @@ export interface PDCA {
   origin_id?: string
 }
 
-export interface A3Report {
-  id: string
-  site_id: string
-  title: string
-  context: string
-  current_state: string
-  target_state: string
-  root_causes: string[]
-  five_whys: string[]
-  action_plan: string[]
-  results: string
-  created_at: string
-}
-
 export type InsightType = 'warning' | 'improvement' | 'info'
 
 export interface Insight {

@@ -1,5 +1,5 @@
 import type {
-  Site, Sale, Incident, CustomerFeedback, Kaizen, PDCA, A3Report, Insight, DailyBriefing
+  Site, Sale, Incident, CustomerFeedback, Kaizen, PDCA, Insight, DailyBriefing
 } from './types'
 
 export const mockSite: Site = {
@@ -296,35 +296,6 @@ export const mockPDCA: PDCA[] = [
   },
 ]
 
-export const mockA3Reports: A3Report[] = [
-  {
-    id: 'a3-1',
-    site_id: 'site-franconville',
-    title: 'Réduction des incidents logistiques',
-    context: 'Augmentation de 40% des incidents liés à la logistique depuis 3 semaines, impactant le service client et le CA food.',
-    current_state: '6 incidents logistiques ce mois, 2 ruptures de stock majeures, délai moyen de résolution 4h.',
-    target_state: 'Réduire à < 2 incidents logistiques par mois, zéro rupture de stock, délai résolution < 1h.',
-    root_causes: [
-      'Fournisseur principal peu fiable sur les délais',
-      'Absence de stock tampon pour les produits critiques',
-      'Pas de procédure d\'escalade définie',
-    ],
-    five_whys: [
-      'Pourquoi rupture de stock ? → Livraison non arrivée à temps',
-      'Pourquoi livraison en retard ? → Fournisseur débordé le week-end',
-      'Pourquoi pas de stock tampon ? → Pas de procédure d\'anticipation',
-      'Pourquoi pas de procédure ? → Jamais formalisé',
-      'Pourquoi jamais formalisé ? → Priorité non donnée en management',
-    ],
-    action_plan: [
-      'Identifier un fournisseur de secours — Resp: Simon — J+7',
-      'Créer un stock tampon minimum 2 jours — Resp: Joanna — J+3',
-      'Rédiger procédure escalade — Resp: Clémentine — J+5',
-    ],
-    results: 'En cours',
-    created_at: new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString(),
-  },
-]
 
 export const mockInsights: Insight[] = [
   {
