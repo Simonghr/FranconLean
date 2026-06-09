@@ -51,14 +51,14 @@ export default function PerformancePage() {
     .map(s => ({
       date: format(new Date(s.date), "dd/MM", { locale: fr }),
       amount: Math.round(s.amount),
-      target: Math.round(s.target),
-      gap: Math.round(s.amount - s.target),
+      target: s.target > 0 ? Math.round(s.target) : null,
+      gap: s.target > 0 ? Math.round(s.amount - s.target) : null,
     }))
 
   const totalCA = data.reduce((sum, d) => sum + d.amount, 0)
-  const totalTarget = data.reduce((sum, d) => sum + d.target, 0)
-  const achievementRate = Math.round((totalCA / totalTarget) * 100)
-  const daysAbove = data.filter(d => d.amount >= d.target).length
+  const totalTarget = data.reduce((sum, d) => sum + (d.target ?? 0), 0)
+  const achievementRate = totalTarget > 0 ? Math.round((totalCA / totalTarget) * 100) : 0
+  const daysAbove = data.filter(d => d.target != null && d.amount >= d.target).length
 
   if (loading) return <div className="text-center py-20 text-slate-500">Chargement…</div>
 
@@ -181,24 +181,27 @@ export default function PerformancePage() {
             </thead>
             <tbody>
               {[...data].reverse().map((row, i) => {
-                const rate = Math.round((row.amount / row.target) * 100)
-                const above = row.amount >= row.target
+                const hasTarget = row.target != null && row.target > 0
+                const rate = hasTarget ? Math.round((row.amount / row.target!) * 100) : null
+                const above = hasTarget && row.amount >= row.target!
                 return (
                   <tr key={i} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors">
                     <td className="px-5 py-3 text-slate-300">{row.date}</td>
                     <td className="px-5 py-3 text-right font-medium text-white">{formatEur(row.amount)}</td>
-                    <td className="px-5 py-3 text-right text-slate-400">{formatEur(row.target)}</td>
-                    <td className={`px-5 py-3 text-right font-medium ${above ? "text-green-400" : "text-red-400"}`}>
-                      {above ? "+" : ""}{formatEur(row.gap)}
+                    <td className="px-5 py-3 text-right text-slate-400">{hasTarget ? formatEur(row.target!) : "—"}</td>
+                    <td className={`px-5 py-3 text-right font-medium ${above ? "text-green-400" : hasTarget ? "text-red-400" : "text-slate-500"}`}>
+                      {row.gap != null ? `${above ? "+" : ""}${formatEur(row.gap)}` : "—"}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        rate >= 100 ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                        : rate >= 90 ? "bg-orange-500/10 text-orange-400 border border-orange-500/20"
-                        : "bg-red-500/10 text-red-400 border border-red-500/20"
-                      }`}>
-                        {rate}%
-                      </span>
+                      {rate != null ? (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          rate >= 100 ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                          : rate >= 90 ? "bg-orange-500/10 text-orange-400 border border-orange-500/20"
+                          : "bg-red-500/10 text-red-400 border border-red-500/20"
+                        }`}>
+                          {rate}%
+                        </span>
+                      ) : <span className="text-slate-600 text-xs">—</span>}
                     </td>
                   </tr>
                 )

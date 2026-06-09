@@ -40,12 +40,17 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 }
 
 export function CAChart({ sales, title = "CA vs Objectif" }: CAChartProps) {
-  const data = sales.slice(-14).map(s => ({
-    date: format(new Date(s.date), "dd/MM", { locale: fr }),
-    amount: Math.round(s.amount),
-    target: Math.round(s.target),
-    above: s.amount >= s.target,
-  }))
+  const today = new Date().toISOString().split("T")[0]
+  const data = sales
+    .filter(s => s.period === "day" && s.amount > 0 && s.date <= today)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-14)
+    .map(s => ({
+      date: format(new Date(s.date), "dd/MM", { locale: fr }),
+      amount: Math.round(s.amount),
+      target: Math.round(s.target),
+      above: s.amount >= s.target,
+    }))
 
   const maxVal = Math.max(...data.map(d => Math.max(d.amount, d.target))) * 1.05
   const minVal = Math.min(...data.map(d => Math.min(d.amount, d.target))) * 0.95
