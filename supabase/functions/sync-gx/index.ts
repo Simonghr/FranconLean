@@ -243,9 +243,15 @@ Deno.serve(async (req) => {
               overall_rating: item?.overallRating ?? null,
               service_rating: item?.serviceRating ?? null,
               service_rating_reasons: item?.serviceRatingReasons ?? null,
+              safety_rating: item?.safetyRating ?? null,
+              safety_rating_reasons: item?.safetyRatingReasons ?? null,
+              facilities_rating: item?.facilitiesRating ?? null,
+              facilities_rating_reasons: item?.facilitiesRatingReasons ?? null,
+              value_rating: item?.valueRating ?? null,
+              value_rating_reasons: item?.valueRatingReasons ?? null,
               is_fan: item?.isFan === true,
               is_critic: item?.isCritic === true,
-              comment: null,
+              comment: item?.comments ?? null,
             })
           }
         }

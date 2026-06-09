@@ -9,6 +9,12 @@ export interface GxReview {
   overall_rating?: number
   service_rating?: number
   service_rating_reasons?: string[]
+  safety_rating?: number
+  safety_rating_reasons?: string[]
+  facilities_rating?: number
+  facilities_rating_reasons?: string[]
+  value_rating?: number
+  value_rating_reasons?: string[]
   is_fan: boolean
   is_critic: boolean
   comment?: string

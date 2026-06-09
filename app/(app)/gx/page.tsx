@@ -227,49 +227,60 @@ export default function GxScorePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {reviews.map(r => {
               const overallStars = r.overall_rating ?? (r.is_fan ? 5 : r.is_critic ? 2 : 3)
-              const color = r.is_fan ? "border-green-500/30 bg-green-500/5" : r.is_critic ? "border-red-500/30 bg-red-500/5" : "border-slate-700"
+              const borderColor = r.is_fan ? "border-green-500/30 bg-green-500/5" : r.is_critic ? "border-red-500/30 bg-red-500/5" : "border-slate-700"
+              const ratingRows: { label: string; val: number; reasons?: string[]; color: string }[] = [
+                { label: "Expérience", val: overallStars, color: "text-amber-400 fill-amber-400" },
+                ...(r.service_rating != null ? [{ label: "Service", val: r.service_rating, reasons: r.service_rating_reasons, color: "text-blue-400 fill-blue-400" }] : []),
+                ...(r.safety_rating != null ? [{ label: "Sécurité", val: r.safety_rating, reasons: r.safety_rating_reasons, color: "text-green-400 fill-green-400" }] : []),
+                ...(r.facilities_rating != null ? [{ label: "Installations", val: r.facilities_rating, reasons: r.facilities_rating_reasons, color: "text-purple-400 fill-purple-400" }] : []),
+                ...(r.value_rating != null ? [{ label: "Rapport qualité/prix", val: r.value_rating, reasons: r.value_rating_reasons, color: "text-orange-400 fill-orange-400" }] : []),
+              ]
               return (
-                <div key={r.id} className={`bg-slate-800 border ${color} rounded-xl p-4 space-y-3`}>
+                <div key={r.id} className={`bg-slate-800 border ${borderColor} rounded-xl p-4 space-y-3`}>
                   <div className="flex items-start justify-between gap-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-1.5">
-                        {r.is_fan
-                          ? <span className="text-xs font-semibold text-green-400 flex items-center gap-1"><ThumbsUp className="w-3 h-3" /> Fan</span>
-                          : r.is_critic
-                          ? <span className="text-xs font-semibold text-red-400 flex items-center gap-1"><ThumbsDown className="w-3 h-3" /> Critique</span>
-                          : null
-                        }
-                      </div>
-                      <div className="flex items-center gap-0.5">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                          <Star key={i} className={`w-3.5 h-3.5 ${i < overallStars ? "text-amber-400 fill-amber-400" : "text-slate-600"}`} />
-                        ))}
-                        <span className="text-xs text-slate-500 ml-1">Expérience</span>
-                      </div>
-                      {r.service_rating != null && (
-                        <div className="flex items-center gap-0.5">
-                          {Array.from({ length: 5 }).map((_, i) => (
-                            <Star key={i} className={`w-3.5 h-3.5 ${i < r.service_rating! ? "text-blue-400 fill-blue-400" : "text-slate-600"}`} />
-                          ))}
-                          <span className="text-xs text-slate-500 ml-1">Service</span>
-                        </div>
-                      )}
+                    <div>
+                      {r.is_fan
+                        ? <span className="text-xs font-semibold text-green-400 flex items-center gap-1"><ThumbsUp className="w-3 h-3" /> Fan</span>
+                        : r.is_critic
+                        ? <span className="text-xs font-semibold text-red-400 flex items-center gap-1"><ThumbsDown className="w-3 h-3" /> Critique</span>
+                        : null
+                      }
                     </div>
                     <span className="text-xs text-slate-500 shrink-0">
                       {format(new Date(r.date), "dd/MM/yyyy", { locale: fr })}
                     </span>
                   </div>
-                  {r.service_rating_reasons && r.service_rating_reasons.length > 0 && (
-                    <div className="flex flex-wrap gap-1">
-                      {r.service_rating_reasons.map((reason, i) => (
-                        <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-300 border border-slate-600">
-                          {reason}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+
+                  {/* All rating rows */}
+                  <div className="space-y-1.5">
+                    {ratingRows.map(({ label, val, reasons, color }) => (
+                      <div key={label}>
+                        <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-0.5">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <Star key={i} className={`w-3 h-3 ${i < val ? color : "text-slate-600"}`} />
+                            ))}
+                          </div>
+                          <span className="text-xs text-slate-400">{label}</span>
+                        </div>
+                        {reasons && reasons.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1 ml-0.5">
+                            {reasons.map((tag, i) => (
+                              <span key={i} className="text-xs px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-400 border border-slate-600">
+                                {tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Free text comment */}
                   {r.comment && (
-                    <p className="text-sm text-slate-200 leading-relaxed">"{r.comment}"</p>
+                    <p className="text-sm text-slate-200 leading-relaxed border-t border-slate-700 pt-3">
+                      "{r.comment}"
+                    </p>
                   )}
                 </div>
               )
