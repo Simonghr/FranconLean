@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
       .map(([date, { fans, critics, total }]) => ({
         site_id: SITE_ID,
         date,
-        score: total ? r2(((fans - critics) / total) * 100) : 0,
+        score: total ? Math.round(fans / total * 100) - Math.round(critics / total * 100) : 0,
         responses_count: total,
         fans_count: fans,
         critics_count: critics,

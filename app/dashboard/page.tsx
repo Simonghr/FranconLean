@@ -84,6 +84,11 @@ export default function DashboardPage() {
   const caTarget = Math.round(todaySale?.target ?? 0)
   const caTrend = caTarget > 0 ? Math.round(((caToday - caTarget) / caTarget) * 100) : 0
 
+// Roller's GX Score formula: round each percentage separately before subtracting.
+// Math.round((fans-critics)/total*100) gives 73 while Roller shows 74 for 26/4/30.
+const gxCalc = (fans: number, critics: number, total: number) =>
+  total ? Math.round(fans / total * 100) - Math.round(critics / total * 100) : 0
+
   // GX Score — last weekend (most recent Saturday + Sunday)
   const lastWeekendScore = (() => {
     if (!gxScores.length) return null
@@ -98,7 +103,7 @@ export default function DashboardPage() {
     const fans = days.reduce((s, g) => s + (g.fans_count ?? 0), 0)
     const critics = days.reduce((s, g) => s + (g.critics_count ?? 0), 0)
     const total = days.reduce((s, g) => s + g.responses_count, 0)
-    return { score: total ? Math.round(((fans - critics) / total) * 100) : 0, total, satStr, sunStr }
+    return { score: gxCalc(fans, critics, total), total, satStr, sunStr }
   })()
 
   // GX Score — last 30 responses
@@ -115,7 +120,7 @@ export default function DashboardPage() {
       critics += Math.round((g.critics_count ?? 0) * ratio)
       total += take
     }
-    return total ? Math.round(((fans - critics) / total) * 100) : null
+    return total ? gxCalc(fans, critics, total) : null
   })()
 
   const openIncidents = incidents.filter(i => i.status === "open" || i.status === "in_progress")
