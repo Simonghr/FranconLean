@@ -99,6 +99,8 @@ export interface PDCA {
   standardization: string
   status: PDCAStatus
   created_at: string
+  origin_label?: string
+  origin_id?: string
 }
 
 export interface A3Report {
