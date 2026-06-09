@@ -2,39 +2,39 @@
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { Bell, MapPin } from "lucide-react"
+import { useAuth } from "@/lib/context/AuthContext"
 
-interface HeaderProps {
-  siteName?: string
-  userName?: string
-}
-
-export function Header({ siteName = "Franconville", userName = "Simon Gohier" }: HeaderProps) {
+export function Header() {
+  const { user } = useAuth()
   const today = new Date()
   const dateStr = format(today, "EEEE d MMMM yyyy", { locale: fr })
   const dateFormatted = dateStr.charAt(0).toUpperCase() + dateStr.slice(1)
+  const displayName = user?.user_metadata?.name ?? user?.email?.split("@")[0] ?? ""
 
   return (
-    <header className="h-14 bg-slate-900 border-b border-slate-700/50 flex items-center justify-between px-6 flex-shrink-0">
+    <header className="h-14 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-6 flex-shrink-0">
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1.5 text-slate-400">
+        <div className="flex items-center gap-1.5">
           <MapPin className="w-4 h-4 text-blue-400" />
-          <span className="text-sm font-medium text-white">{siteName}</span>
+          <span className="text-sm font-medium text-white">Franconville</span>
         </div>
-        <span className="text-slate-600">•</span>
+        <span className="text-slate-700">•</span>
         <span className="text-sm text-slate-400">{dateFormatted}</span>
       </div>
 
       <div className="flex items-center gap-3">
         <button className="relative text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors">
           <Bell className="w-5 h-5" />
-          <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-orange-500 rounded-full"></span>
+          <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-orange-500 rounded-full" />
         </button>
-        <div className="flex items-center gap-2 pl-3 border-l border-slate-700">
-          <div className="w-7 h-7 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-semibold">
-            {userName.charAt(0)}
+        {displayName && (
+          <div className="flex items-center gap-2 pl-3 border-l border-slate-800">
+            <div className="w-7 h-7 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-semibold">
+              {displayName.charAt(0).toUpperCase()}
+            </div>
+            <span className="text-sm text-slate-300">{displayName}</span>
           </div>
-          <span className="text-sm text-slate-300">{userName}</span>
-        </div>
+        )}
       </div>
     </header>
   )
