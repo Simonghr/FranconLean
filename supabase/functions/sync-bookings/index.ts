@@ -167,17 +167,26 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Deduplicate rows by roller_booking_id+product_id (same booking fetched across multiple days)
+    const seen = new Set<string>()
+    const uniqueRows = rows.filter(r => {
+      const key = `${r.roller_booking_id}|${r.product_id}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
     if (!supabaseUrl || !supabaseKey) throw new Error("Missing Supabase env vars")
     const supabase = createClient(supabaseUrl, supabaseKey)
 
     let synced = 0
-    if (rows.length) {
+    if (uniqueRows.length) {
       try {
-        const r = await supabase.from("bookings").upsert(rows, { onConflict: "roller_booking_id,product_id" })
+        const r = await supabase.from("bookings").upsert(uniqueRows, { onConflict: "roller_booking_id,product_id" })
         if (r?.error) errors.push(`bookings upsert: ${r.error.message}`)
-        else synced = rows.length
+        else synced = uniqueRows.length
       } catch (e) {
         errors.push(`bookings skipped: ${String(e).slice(0, 200)}`)
       }
@@ -188,7 +197,7 @@ Deno.serve(async (req) => {
       dateRange: { startDate, endDate },
       bookingsReceived: allBookings.length,
       rowsSynced: synced,
-      anniversaireCount: rows.filter(r => r.is_anniversary).length,
+      anniversaireCount: uniqueRows.filter(r => r.is_anniversary).length,
       errors: errors.length ? errors : undefined,
     }, null, 2), { headers: { ...cors, "Content-Type": "application/json" } })
 
