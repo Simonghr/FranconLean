@@ -98,24 +98,31 @@ Deno.serve(async (req) => {
     const token = await getToken(clientId, clientSecret)
 
     if (debug) {
-      // Probe different endpoints to find bookings
       const [
-        bookingsResult,
-        bookingsByVisit,
-        reportingBookings,
-        bookingsList,
+        r1, r2, r3, r4, r5, r6, r7
       ] = await Promise.all([
-        probe(token, `/bookings?startDate=${startDate}&endDate=${endDate}&pageNumber=1&pageSize=3`),
-        probe(token, `/bookings?visitDate=${startDate}&pageNumber=1&pageSize=3`),
-        probe(token, `/reporting/bookings?startDate=${startDate}&endDate=${endDate}&pageNumber=1&pageSize=3`),
-        probe(token, `/bookings?pageNumber=1&pageSize=3`),
+        probe(token, `/bookings?bookingDate=${startDate}&pageNumber=1&pageSize=3`),
+        probe(token, `/bookings?sessionDate=${startDate}&pageNumber=1&pageSize=3`),
+        probe(token, `/bookings?date=${startDate}&pageNumber=1&pageSize=3`),
+        probe(token, `/bookings?from=${startDate}&to=${endDate}&pageNumber=1&pageSize=3`),
+        probe(token, `/bookings?createdFrom=${startDate}&createdTo=${endDate}&pageNumber=1&pageSize=3`),
+        probe(token, `/bookings?bookingDateFrom=${startDate}&bookingDateTo=${endDate}&pageNumber=1&pageSize=3`),
+        probe(token, `/products?pageNumber=1&pageSize=50`),
       ])
 
       return new Response(JSON.stringify({
         success: true,
         mode: "debug",
         dateRange: { startDate, endDate },
-        endpoints: { bookingsResult, bookingsByVisit, reportingBookings, bookingsList },
+        endpoints: {
+          "bookingDate=":       r1,
+          "sessionDate=":       r2,
+          "date=":              r3,
+          "from/to=":           r4,
+          "createdFrom/To=":    r5,
+          "bookingDateFrom/To=":r6,
+          "products (all)":     r7,
+        },
       }, null, 2), { headers: { ...cors, "Content-Type": "application/json" } })
     }
 
