@@ -48,27 +48,33 @@ async function probe(token: string, path: string) {
   return { status: res.status, body }
 }
 
-async function fetchBookingsPage(token: string, startDate: string, endDate: string, page: number) {
-  // Try different possible endpoints
-  const url = `${ROLLER_BASE}/bookings?startDate=${startDate}&endDate=${endDate}&pageNumber=${page}&pageSize=100`
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-    })
-    if (res.status === 429) { await sleep(2000); continue }
-    const text = await res.text()
-    if (!res.ok) return { items: [], raw: { status: res.status, text: text.slice(0, 300) } }
-    const parsed = JSON.parse(text)
-    // Extract items from various response shapes
+async function fetchBookingsForDate(token: string, date: string): Promise<any[]> {
+  const all: any[] = []
+  for (let page = 1; page <= 20; page++) {
+    const url = `${ROLLER_BASE}/bookings?date=${date}&pageNumber=${page}&pageSize=100`
     let items: any[] = []
-    if (Array.isArray(parsed)) items = parsed
-    else if (parsed?.items) items = parsed.items
-    else if (parsed?.data) items = parsed.data
-    else if (parsed?.bookings) items = parsed.bookings
-    else if (parsed?.results) items = parsed.results
-    return { items, raw: parsed, totalPages: parsed?.totalPages ?? 1 }
+    let totalPages = 1
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+      })
+      if (res.status === 429) { await sleep(2000); continue }
+      const text = await res.text()
+      if (!res.ok) break
+      const parsed = JSON.parse(text)
+      if (Array.isArray(parsed)) items = parsed
+      else if (parsed?.bookings) items = parsed.bookings
+      else if (parsed?.items) items = parsed.items
+      else if (parsed?.data) items = parsed.data
+      else if (parsed?.results) items = parsed.results
+      totalPages = parsed?.totalPages ?? 1
+      break
+    }
+    all.push(...items)
+    if (items.length === 0 || page >= totalPages) break
+    await sleep(RATE_LIMIT_MS)
   }
-  return { items: [], raw: null, totalPages: 1 }
+  return all
 }
 
 Deno.serve(async (req) => {
@@ -127,15 +133,17 @@ Deno.serve(async (req) => {
       }, null, 2), { headers: { ...cors, "Content-Type": "application/json" } })
     }
 
-    // Normal sync: fetch bookings in range
+    // Normal sync: iterate day by day (Roller only accepts date= single-day param)
     const allBookings: any[] = []
     const errors: string[] = []
 
-    for (let page = 1; page <= 20; page++) {
+    const startMs = new Date(startDate).getTime()
+    const endMs = new Date(endDate).getTime()
+    for (let ms = startMs; ms <= endMs; ms += DAY_MS) {
+      const day = ymd(new Date(ms))
       await sleep(RATE_LIMIT_MS)
-      const result = await fetchBookingsPage(token, startDate, endDate, page)
-      allBookings.push(...result.items)
-      if (result.items.length === 0 || page >= (result.totalPages ?? 1)) break
+      const dayBookings = await fetchBookingsForDate(token, day)
+      allBookings.push(...dayBookings)
     }
 
     // Extract booking rows — look for Anniversaire products
