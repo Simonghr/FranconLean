@@ -1,12 +1,15 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend
 } from "recharts"
-import { format, subDays, startOfWeek, endOfWeek } from "date-fns"
+import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { TrendingUp, TrendingDown, Target, Euro } from "lucide-react"
-import { mockSales } from "@/lib/mockData"
+import * as salesRepo from "@/lib/repositories/sales"
+import type { Sale } from "@/lib/types"
+
+const SITE_ID = '00000000-0000-0000-0000-000000000001'
 
 type Period = "day" | "week" | "month"
 
@@ -31,18 +34,33 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function PerformancePage() {
   const [period, setPeriod] = useState<Period>("day")
+  const [sales, setSales] = useState<Sale[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const data = mockSales.slice(-30).map(s => ({
-    date: format(new Date(s.date), "dd/MM", { locale: fr }),
-    amount: Math.round(s.amount),
-    target: Math.round(s.target),
-    gap: Math.round(s.amount - s.target),
-  }))
+  useEffect(() => {
+    salesRepo.getAll(SITE_ID)
+      .then(setSales)
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
+
+  const data = sales
+    .filter(s => s.period === "day" && s.amount > 0)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-30)
+    .map(s => ({
+      date: format(new Date(s.date), "dd/MM", { locale: fr }),
+      amount: Math.round(s.amount),
+      target: Math.round(s.target),
+      gap: Math.round(s.amount - s.target),
+    }))
 
   const totalCA = data.reduce((sum, d) => sum + d.amount, 0)
   const totalTarget = data.reduce((sum, d) => sum + d.target, 0)
   const achievementRate = Math.round((totalCA / totalTarget) * 100)
   const daysAbove = data.filter(d => d.amount >= d.target).length
+
+  if (loading) return <div className="text-center py-20 text-slate-500">Chargement…</div>
 
   return (
     <div className="space-y-6 max-w-[1400px]">
