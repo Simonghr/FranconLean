@@ -181,6 +181,8 @@ Deno.serve(async (req) => {
         date,
         score: total ? r2(((fans - critics) / total) * 100) : 0,
         responses_count: total,
+        fans_count: fans,
+        critics_count: critics,
         period: "day",
       }))
       .sort((a, b) => a.date.localeCompare(b.date))

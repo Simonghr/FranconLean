@@ -84,10 +84,39 @@ export default function DashboardPage() {
   const caTarget = Math.round(todaySale?.target ?? 0)
   const caTrend = caTarget > 0 ? Math.round(((caToday - caTarget) / caTarget) * 100) : 0
 
-  const todayGx = gxScores[gxScores.length - 1]
-  const previousGx = gxScores[gxScores.length - 2]
-  const gxScore = todayGx?.score ?? null
-  const gxTrend = (gxScore !== null && previousGx) ? Math.round(gxScore - previousGx.score) : 0
+  // GX Score — last weekend (most recent Saturday + Sunday)
+  const lastWeekendScore = (() => {
+    if (!gxScores.length) return null
+    const today = new Date()
+    const dow = today.getDay() // 0=Sun,1=Mon,...,6=Sat
+    const lastSun = new Date(today); lastSun.setDate(today.getDate() - (dow === 0 ? 7 : dow))
+    const lastSat = new Date(lastSun); lastSat.setDate(lastSun.getDate() - 1)
+    const satStr = lastSat.toISOString().split("T")[0]
+    const sunStr = lastSun.toISOString().split("T")[0]
+    const days = gxScores.filter(g => g.date === satStr || g.date === sunStr)
+    if (!days.length) return null
+    const fans = days.reduce((s, g) => s + (g.fans_count ?? 0), 0)
+    const critics = days.reduce((s, g) => s + (g.critics_count ?? 0), 0)
+    const total = days.reduce((s, g) => s + g.responses_count, 0)
+    return { score: total ? Math.round(((fans - critics) / total) * 100) : 0, total, satStr, sunStr }
+  })()
+
+  // GX Score — last 30 responses
+  const last30Score = (() => {
+    if (!gxScores.length) return null
+    const sorted = [...gxScores].sort((a, b) => b.date.localeCompare(a.date))
+    let fans = 0, critics = 0, total = 0
+    for (const g of sorted) {
+      const remaining = 30 - total
+      if (remaining <= 0) break
+      const take = Math.min(remaining, g.responses_count)
+      const ratio = take / g.responses_count
+      fans += Math.round((g.fans_count ?? 0) * ratio)
+      critics += Math.round((g.critics_count ?? 0) * ratio)
+      total += take
+    }
+    return total ? Math.round(((fans - critics) / total) * 100) : null
+  })()
 
   const openIncidents = incidents.filter(i => i.status === "open" || i.status === "in_progress")
   const weekFeedback = feedback.filter(f => {
@@ -139,7 +168,7 @@ export default function DashboardPage() {
       <BriefingHeader briefing={mockBriefing} siteName={mockSite.name} />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <KPICard
           title="CA Aujourd'hui"
           value={loading ? "…" : `${caToday.toLocaleString("fr-FR")} €`}
@@ -149,12 +178,20 @@ export default function DashboardPage() {
           status={caTrend >= 0 ? "good" : caTrend > -10 ? "warning" : "critical"}
         />
         <KPICard
-          title="GX Score"
-          value={loading ? "…" : gxScore !== null ? `${gxScore} pts` : "–"}
-          subtitle={gxError ? `Erreur: ${gxError.slice(0, 60)}` : todayGx ? `${todayGx.responses_count} avis · ${todayGx.date}` : "Aucune donnée"}
-          trend={gxTrend}
-          trendLabel="vs jour précédent"
-          status={gxScore === null ? "warning" : gxScore >= 50 ? "good" : gxScore >= 0 ? "warning" : "critical"}
+          title="GX Week-end"
+          value={loading ? "…" : lastWeekendScore !== null ? `${lastWeekendScore.score} pts` : "–"}
+          subtitle={lastWeekendScore ? `${lastWeekendScore.total} avis · sam+dim` : gxError ? `Erreur: ${gxError.slice(0, 40)}` : "Aucune donnée"}
+          trend={0}
+          trendLabel=""
+          status={lastWeekendScore === null ? "warning" : lastWeekendScore.score >= 50 ? "good" : lastWeekendScore.score >= 0 ? "warning" : "critical"}
+        />
+        <KPICard
+          title="GX 30 dernières"
+          value={loading ? "…" : last30Score !== null ? `${last30Score} pts` : "–"}
+          subtitle="30 dernières réponses"
+          trend={0}
+          trendLabel=""
+          status={last30Score === null ? "warning" : last30Score >= 50 ? "good" : last30Score >= 0 ? "warning" : "critical"}
         />
         <KPICard
           title="Incidents Ouverts"

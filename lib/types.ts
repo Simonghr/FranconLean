@@ -32,6 +32,8 @@ export interface GxScore {
   date: string
   score: number
   responses_count: number
+  fans_count: number
+  critics_count: number
   period: SalePeriod
 }
 
