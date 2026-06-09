@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import * as incidentsRepo from "@/lib/repositories/incidents"
-import type { Incident, IncidentStatus, IncidentCategory, IncidentImpact, IncidentZone, IncidentType } from "@/lib/types"
+import type { Incident, IncidentStatus, IncidentCategory, IncidentImpact, IncidentZone, IncidentType, IncidentUrgency } from "@/lib/types"
 
 const SITE_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -67,6 +67,12 @@ const typeColors: Record<IncidentType, string> = {
   blessure: "text-red-400", service_client: "text-purple-400",
 }
 
+const urgencyConfig: Record<IncidentUrgency, { label: string; color: string; bg: string; dot: string }> = {
+  low:           { label: "Faible",                  color: "text-slate-400",  bg: "bg-slate-500/10",  dot: "bg-slate-400" },
+  medium:        { label: "Moyen",                   color: "text-yellow-400", bg: "bg-yellow-500/10", dot: "bg-yellow-400" },
+  client_impact: { label: "Expérience client impactée", color: "text-red-400", bg: "bg-red-500/10",    dot: "bg-red-400" },
+}
+
 // ── Blank form ───────────────────────────────────────────────────────────────
 
 const nowParis = () => {
@@ -84,11 +90,12 @@ type FormState = {
   date: string
   time: string
   owner: string
+  urgency: string
 }
 
 const blankForm = (): FormState => {
   const { date, time } = nowParis()
-  return { description: "", incident_type: "technique", zone: "parc", date, time, owner: "" }
+  return { description: "", incident_type: "technique", zone: "parc", date, time, owner: "", urgency: "low" }
 }
 
 // ── Incident form (shared by Create + Edit) ──────────────────────────────────
@@ -122,6 +129,22 @@ function IncidentForm({ form, onChange }: { form: FormState; onChange: (f: FormS
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             {Object.entries(typeLabels).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2">
+        <Label>Niveau d'urgence</Label>
+        <Select value={form.urgency} onValueChange={set("urgency")}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {(Object.entries(urgencyConfig) as [IncidentUrgency, typeof urgencyConfig[IncidentUrgency]][]).map(([k, v]) => (
+              <SelectItem key={k} value={k}>
+                <span className={`flex items-center gap-2 ${v.color}`}>
+                  <span className={`w-2 h-2 rounded-full ${v.dot} inline-block`} />
+                  {v.label}
+                </span>
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -175,6 +198,7 @@ export default function IncidentsPage() {
     occurred_at: new Date(`${f.date}T${f.time}:00`).toISOString(),
     zone: f.zone as IncidentZone,
     incident_type: f.incident_type as IncidentType,
+    urgency: f.urgency as IncidentUrgency,
     owner: f.owner,
   })
 
@@ -205,6 +229,7 @@ export default function IncidentsPage() {
       date: occurred.toLocaleDateString("en-CA", { timeZone: "Europe/Paris" }),
       time: occurred.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }),
       owner: inc.owner ?? "",
+      urgency: inc.urgency ?? "low",
     })
     setEditOpen(true)
   }
@@ -333,17 +358,17 @@ export default function IncidentsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-700">
-                {["Date/Heure", "Zone", "Type", "Description", "Responsable", "Statut", "Actions"].map(h => (
+                {["Date/Heure", "Zone", "Urgence", "Type", "Description", "Responsable", "Statut", "Actions"].map(h => (
                   <th key={h} className="text-left px-4 py-3 text-xs text-slate-400 font-semibold uppercase tracking-widest whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7} className="px-4 py-12 text-center text-slate-500">Chargement…</td></tr>
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-slate-500">Chargement…</td></tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-500">
+                  <td colSpan={8} className="px-4 py-12 text-center text-slate-500">
                     <AlertTriangle className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     Aucun incident trouvé
                   </td>
@@ -369,6 +394,18 @@ export default function IncidentsPage() {
                           {zoneLabels[inc.zone as IncidentZone] ?? inc.zone}
                         </div>
                       ) : <span className="text-slate-600">—</span>}
+                    </td>
+                    {/* Urgence */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {inc.urgency ? (() => {
+                        const u = urgencyConfig[inc.urgency as IncidentUrgency]
+                        return u ? (
+                          <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${u.color}`}>
+                            <span className={`w-2 h-2 rounded-full ${u.dot} flex-shrink-0`} />
+                            {u.label}
+                          </span>
+                        ) : null
+                      })() : <span className="text-slate-600">—</span>}
                     </td>
                     {/* Type */}
                     <td className="px-4 py-3">

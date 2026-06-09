@@ -39,6 +39,7 @@ export interface GxScore {
 
 export type IncidentCategory = 'process' | 'quality' | 'security' | 'client' | 'it' | 'logistics' | 'other'
 export type IncidentImpact = 'low' | 'medium' | 'high'
+export type IncidentUrgency = 'low' | 'medium' | 'client_impact'
 export type IncidentStatus = 'declared' | 'analysed' | 'action_ongoing' | 'verified' | 'standardised' | 'closed'
 export type IncidentZone = 'bar' | 'caisse' | 'arcades' | 'parc' | 'laser_game' | 'annivs'
 export type IncidentType = 'technique' | 'operationnel' | 'blessure' | 'service_client'
@@ -56,6 +57,7 @@ export interface Incident {
   zone?: IncidentZone
   incident_type?: IncidentType
   occurred_at?: string
+  urgency?: IncidentUrgency
 }
 
 export type FeedbackType = 'satisfaction' | 'complaint'
