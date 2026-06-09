@@ -239,11 +239,15 @@ Deno.serve(async (req) => {
     // Upsert individual reviews (only those with a roller_id)
     let reviewsSynced = 0
     if (reviewRows.length) {
-      const { error: revErr } = await supabase
-        .from("gx_reviews")
-        .upsert(reviewRows, { onConflict: "roller_id" })
-      if (revErr) errors.push(`gx_reviews upsert: ${revErr.message}`)
-      else reviewsSynced = reviewRows.length
+      try {
+        const result = await supabase
+          .from("gx_reviews")
+          .upsert(reviewRows, { onConflict: "roller_id" })
+        if (result?.error) errors.push(`gx_reviews upsert: ${result.error.message}`)
+        else reviewsSynced = reviewRows.length
+      } catch (e) {
+        errors.push(`gx_reviews skipped (table may not exist yet): ${String(e).slice(0, 100)}`)
+      }
     }
 
     return new Response(
