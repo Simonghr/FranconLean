@@ -272,43 +272,47 @@ Deno.serve(async (req) => {
       }))
       .sort((a, b) => a.date.localeCompare(b.date))
 
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    )
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+    if (!supabaseUrl || !supabaseKey) throw new Error("Missing Supabase env vars")
+
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
+    const dbErr = (op: string, r: any) => {
+      const msg = r?.error?.message ?? r?.error ?? String(r)
+      throw new Error(`${op}: ${msg}`)
+    }
 
     let synced = 0
     if (rows.length) {
-      const { error: siteErr } = await supabase
-        .from("sites")
-        .upsert({ id: SITE_ID, name: "Franconville" }, { onConflict: "id" })
-      if (siteErr) throw new Error(`upsert site: ${siteErr.message}`)
+      try {
+        const r1 = await supabase.from("sites").upsert({ id: SITE_ID, name: "Franconville" }, { onConflict: "id" })
+        if (r1 && r1.error) dbErr("upsert site", r1)
+      } catch (e) { throw new Error(`upsert site: ${String(e)}`) }
 
-      const { error: delErr } = await supabase
-        .from("gx_scores")
-        .delete()
-        .eq("site_id", SITE_ID)
-        .eq("period", "day")
-        .gte("date", startDate)
-        .lte("date", lastDateStr)
-      if (delErr) throw new Error(`delete gx_scores: ${delErr.message}`)
+      try {
+        const r2 = await supabase.from("gx_scores").delete()
+          .eq("site_id", SITE_ID).eq("period", "day")
+          .gte("date", startDate).lte("date", lastDateStr)
+        if (r2 && r2.error) dbErr("delete gx_scores", r2)
+      } catch (e) { throw new Error(`delete gx_scores: ${String(e)}`) }
 
-      const { error: insErr } = await supabase.from("gx_scores").insert(rows)
-      if (insErr) throw new Error(`insert gx_scores: ${insErr.message}`)
-      synced = rows.length
+      try {
+        const r3 = await supabase.from("gx_scores").insert(rows)
+        if (r3 && r3.error) dbErr("insert gx_scores", r3)
+        synced = rows.length
+      } catch (e) { throw new Error(`insert gx_scores: ${String(e)}`) }
     }
 
     // Upsert individual reviews (only those with a roller_id)
     let reviewsSynced = 0
     if (reviewRows.length) {
       try {
-        const result = await supabase
-          .from("gx_reviews")
-          .upsert(reviewRows, { onConflict: "roller_id" })
-        if (result?.error) errors.push(`gx_reviews upsert: ${result.error.message}`)
+        const r4 = await supabase.from("gx_reviews").upsert(reviewRows, { onConflict: "roller_id" })
+        if (r4 && r4.error) errors.push(`gx_reviews upsert: ${r4.error.message ?? JSON.stringify(r4.error)}`)
         else reviewsSynced = reviewRows.length
       } catch (e) {
-        errors.push(`gx_reviews skipped (table may not exist yet): ${String(e).slice(0, 100)}`)
+        errors.push(`gx_reviews skipped: ${String(e).slice(0, 200)}`)
       }
     }
 
