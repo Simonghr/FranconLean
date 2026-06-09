@@ -94,13 +94,14 @@ export default function DashboardPage() {
 
       // Anniversaires next weekend
       try {
-        const today = new Date()
+        const todayParis = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" })
+        const today = new Date(todayParis + "T12:00:00")
         const dow = today.getDay() // 0=Sun, 6=Sat
         const daysToSat = dow === 6 ? 7 : (6 - dow + 7) % 7 || 7
         const sat = new Date(today); sat.setDate(today.getDate() + daysToSat)
         const sun = new Date(sat); sun.setDate(sat.getDate() + 1)
-        const satStr = sat.toISOString().split("T")[0]
-        const sunStr = sun.toISOString().split("T")[0]
+        const satStr = sat.toLocaleDateString("en-CA")
+        const sunStr = sun.toLocaleDateString("en-CA")
 
         const { data } = await import('@/lib/supabase').then(m =>
           m.supabase.from('bookings')
