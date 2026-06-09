@@ -22,6 +22,8 @@ import * as salesRepo from "@/lib/repositories/sales"
 import * as gxRepo from "@/lib/repositories/gx"
 import * as feedbackRepo from "@/lib/repositories/feedback"
 import * as kaizenRepo from "@/lib/repositories/kaizen"
+import * as gxReviewsRepo from "@/lib/repositories/gxReviews"
+import type { GxReview } from "@/lib/repositories/gxReviews"
 import { generateInsights } from "@/lib/services/insightsService"
 import { seedDatabase } from "@/lib/seed"
 import type { Incident, Sale, GxScore, CustomerFeedback, Insight, IncidentCategory, IncidentImpact, IncidentZone, IncidentType } from "@/lib/types"
@@ -34,6 +36,7 @@ export default function DashboardPage() {
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [sales, setSales] = useState<Sale[]>([])
   const [gxScores, setGxScores] = useState<GxScore[]>([])
+  const [gxReviews, setGxReviews] = useState<GxReview[]>([])
   const [gxError, setGxError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<CustomerFeedback[]>([])
   const [insights, setInsights] = useState<Insight[]>([])
@@ -77,8 +80,12 @@ export default function DashboardPage() {
       }
       // GX scores loaded separately so a failure here doesn't blank the whole dashboard
       try {
-        const gx = await gxRepo.getAll(SITE_ID)
+        const [gx, rev] = await Promise.all([
+          gxRepo.getAll(SITE_ID),
+          gxReviewsRepo.getRecent(SITE_ID, 200),
+        ])
         setGxScores(gx)
+        setGxReviews(rev)
       } catch (err) {
         console.error('Failed to load GX scores', err)
         setGxError(err instanceof Error ? err.message : String(err))
@@ -130,6 +137,26 @@ const gxCalc = (fans: number, critics: number, total: number) =>
       total += take
     }
     return total ? gxCalc(fans, critics, total) : null
+  })()
+
+  // ── GX tag synthesis ──────────────────────────────────────────────────────
+  const tagSynthesis = (() => {
+    const fanTags: Record<string, number> = {}
+    const criticTags: Record<string, number> = {}
+    for (const r of gxReviews) {
+      const allReasons = [
+        ...(r.service_rating_reasons ?? []),
+        ...(r.safety_rating_reasons ?? []),
+        ...(r.facilities_rating_reasons ?? []),
+        ...(r.value_rating_reasons ?? []),
+      ]
+      const target = r.is_fan ? fanTags : r.is_critic ? criticTags : null
+      if (!target) continue
+      for (const tag of allReasons) target[tag] = (target[tag] ?? 0) + 1
+    }
+    const toTop = (obj: Record<string, number>, n = 5) =>
+      Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, n)
+    return { fans: toTop(fanTags), critics: toTop(criticTags) }
   })()
 
   const openIncidents = incidents.filter(i => i.status !== 'closed' && i.status !== 'standardised')
@@ -247,6 +274,57 @@ const gxCalc = (fans: number, critics: number, total: number) =>
           <FeedbackChart feedback={feedback} title="Sentiment clients" />
         </div>
       </div>
+
+      {/* GX Tag Synthesis */}
+      {(tagSynthesis.fans.length > 0 || tagSynthesis.critics.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="bg-slate-800 border border-green-500/20 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-green-400 flex items-center gap-2 mb-3">
+              👍 Ce qui plaît (Fans)
+            </h3>
+            <div className="space-y-2">
+              {tagSynthesis.fans.map(([tag, count]) => {
+                const pct = Math.round(count / tagSynthesis.fans[0][1] * 100)
+                return (
+                  <div key={tag}>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-slate-200">{tag}</span>
+                      <span className="text-slate-400">{count}</span>
+                    </div>
+                    <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-green-500 rounded-full" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          <div className="bg-slate-800 border border-red-500/20 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-red-400 flex items-center gap-2 mb-3">
+              👎 Ce qui déplaît (Critiques)
+            </h3>
+            <div className="space-y-2">
+              {tagSynthesis.critics.length === 0
+                ? <p className="text-xs text-slate-500">Pas encore de données</p>
+                : tagSynthesis.critics.map(([tag, count]) => {
+                  const pct = Math.round(count / tagSynthesis.critics[0][1] * 100)
+                  return (
+                    <div key={tag}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-slate-200">{tag}</span>
+                        <span className="text-slate-400">{count}</span>
+                      </div>
+                      <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                        <div className="h-full bg-red-500 rounded-full" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  )
+                })
+              }
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom row: insights + quick actions */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
