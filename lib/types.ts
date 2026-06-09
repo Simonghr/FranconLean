@@ -88,6 +88,7 @@ export interface Kaizen {
 }
 
 export type PDCAStatus = 'plan' | 'do' | 'check' | 'act'
+export type PDCAPriority = 'low' | 'medium' | 'urgent' | 'investment'
 
 export interface PDCA {
   id: string
@@ -98,6 +99,8 @@ export interface PDCA {
   result: string
   standardization: string
   status: PDCAStatus
+  priority?: PDCAPriority
+  budget?: number
   created_at: string
   origin_label?: string
   origin_id?: string

@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import * as pdcaRepo from "@/lib/repositories/pdca"
 import * as kaizenRepo from "@/lib/repositories/kaizen"
-import type { PDCA, PDCAStatus, Kaizen, KaizenStatus } from "@/lib/types"
+import type { PDCA, PDCAStatus, PDCAPriority, Kaizen, KaizenStatus } from "@/lib/types"
 
 const SITE_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -19,12 +19,21 @@ const SITE_ID = '00000000-0000-0000-0000-000000000001'
 
 const PDCA_STATUSES: PDCAStatus[] = ['plan', 'do', 'check', 'act']
 
-// Post-it colors per status
-const stickyColor: Record<PDCAStatus, { bg: string; border: string; dot: string; label: string; next: string }> = {
-  plan:  { bg: "bg-[#fde68a]", border: "border-yellow-300",  dot: "bg-yellow-500",  label: "En recherche de solution", next: "→ En test" },
-  do:    { bg: "bg-[#fed7aa]", border: "border-orange-300",  dot: "bg-orange-500",  label: "En test",                  next: "→ En cours de validation" },
-  check: { bg: "bg-[#bfdbfe]", border: "border-blue-300",    dot: "bg-blue-500",    label: "En cours de validation",   next: "→ Validé / Standardisé" },
-  act:   { bg: "bg-[#bbf7d0]", border: "border-green-300",   dot: "bg-green-600",   label: "Validé / Standardisé",     next: "" },
+const statusConfig: Record<PDCAStatus, { dot: string; label: string; next: string }> = {
+  plan:  { dot: "bg-slate-400",  label: "En recherche de solution", next: "→ En test" },
+  do:    { dot: "bg-orange-400", label: "En test",                  next: "→ En cours de validation" },
+  check: { dot: "bg-blue-500",   label: "En cours de validation",   next: "→ Validé / Standardisé" },
+  act:   { dot: "bg-green-600",  label: "Validé / Standardisé",     next: "" },
+}
+
+// Post-it color = priority (importance)
+const PDCA_PRIORITIES: PDCAPriority[] = ['low', 'medium', 'urgent', 'investment']
+
+const priorityColor: Record<PDCAPriority, { bg: string; border: string; label: string; dot: string }> = {
+  low:        { bg: "bg-[#bbf7d0]", border: "border-green-300",  label: "Faible",               dot: "bg-green-600" },
+  medium:     { bg: "bg-[#fed7aa]", border: "border-orange-300", label: "Moyen",                dot: "bg-orange-500" },
+  urgent:     { bg: "bg-[#fecaca]", border: "border-red-300",    label: "Urgent",               dot: "bg-red-600" },
+  investment: { bg: "bg-[#bfdbfe]", border: "border-blue-300",   label: "Gros investissement",  dot: "bg-blue-600" },
 }
 
 const nextPdcaStatus = (s: PDCAStatus): PDCAStatus | null => {
@@ -34,10 +43,11 @@ const nextPdcaStatus = (s: PDCAStatus): PDCAStatus | null => {
 
 type PDCAFormState = {
   problem: string; action: string; result: string; standardization: string
-  status: PDCAStatus; origin_label?: string; origin_id?: string
+  status: PDCAStatus; priority: PDCAPriority; budget: string
+  origin_label?: string; origin_id?: string
 }
 const blankPdca = (o?: Partial<PDCAFormState>): PDCAFormState => ({
-  problem: "", action: "", result: "", standardization: "", status: "plan",
+  problem: "", action: "", result: "", standardization: "", status: "plan", priority: "medium", budget: "",
   origin_label: "", origin_id: "", ...o,
 })
 
@@ -112,14 +122,14 @@ function LeanPageInner() {
 
   const openEditPdca = (p: PDCA) => {
     setEditingPdca(p)
-    setPdcaForm({ problem: p.problem, action: p.action, result: p.result, standardization: p.standardization, status: p.status, origin_label: p.origin_label ?? "", origin_id: p.origin_id ?? "" })
+    setPdcaForm({ problem: p.problem, action: p.action, result: p.result, standardization: p.standardization, status: p.status, priority: p.priority ?? "medium", budget: p.budget ? String(p.budget) : "", origin_label: p.origin_label ?? "", origin_id: p.origin_id ?? "" })
     setPdcaOpen(true)
   }
 
   const savePdca = async () => {
     setSavingPdca(true)
     try {
-      const payload = { site_id: SITE_ID, problem: pdcaForm.problem, objective: "", action: pdcaForm.action, result: pdcaForm.result, standardization: pdcaForm.standardization, status: pdcaForm.status, origin_label: pdcaForm.origin_label || undefined, origin_id: pdcaForm.origin_id || undefined }
+      const payload = { site_id: SITE_ID, problem: pdcaForm.problem, objective: "", action: pdcaForm.action, result: pdcaForm.result, standardization: pdcaForm.standardization, status: pdcaForm.status, priority: pdcaForm.priority, budget: pdcaForm.budget ? Number(pdcaForm.budget) : undefined, origin_label: pdcaForm.origin_label || undefined, origin_id: pdcaForm.origin_id || undefined }
       editingPdca ? await pdcaRepo.update(editingPdca.id, payload) : await pdcaRepo.create(payload)
       setPdcaOpen(false); await load()
     } catch (err) { console.error(err) }
@@ -309,6 +319,36 @@ function LeanPageInner() {
                 onChange={e => setPdcaForm(f => ({ ...f, standardization: e.target.value }))}
               />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-slate-300 font-semibold">Importance</Label>
+                <Select value={pdcaForm.priority} onValueChange={v => setPdcaForm(f => ({ ...f, priority: v as PDCAPriority }))}>
+                  <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-700 text-white">
+                    {PDCA_PRIORITIES.map(p => (
+                      <SelectItem key={p} value={p}>
+                        <span className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full inline-block ${priorityColor[p].dot}`} />
+                          {priorityColor[p].label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-slate-300 font-semibold">Budget estimé (€)</Label>
+                <input
+                  type="number"
+                  className="w-full rounded-md bg-slate-800 border border-slate-700 text-white px-3 py-2 text-sm"
+                  placeholder="0"
+                  value={pdcaForm.budget}
+                  onChange={e => setPdcaForm(f => ({ ...f, budget: e.target.value }))}
+                />
+              </div>
+            </div>
             <div className="space-y-1.5">
               <Label className="text-slate-300 font-semibold">Avancement</Label>
               <Select value={pdcaForm.status} onValueChange={v => setPdcaForm(f => ({ ...f, status: v as PDCAStatus }))}>
@@ -319,8 +359,8 @@ function LeanPageInner() {
                   {PDCA_STATUSES.map(s => (
                     <SelectItem key={s} value={s}>
                       <span className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full inline-block ${stickyColor[s].dot}`} />
-                        {stickyColor[s].label}
+                        <span className={`w-2 h-2 rounded-full inline-block ${statusConfig[s].dot}`} />
+                        {statusConfig[s].label}
                       </span>
                     </SelectItem>
                   ))}
@@ -390,18 +430,19 @@ function LeanPageInner() {
 function StickyPDCA({ pdca, onEdit, onDelete, onAdvance, deleting }: {
   pdca: PDCA; onEdit: () => void; onDelete: () => void; onAdvance: () => void; deleting: boolean
 }) {
-  const cfg = stickyColor[pdca.status]
+  const prio = priorityColor[pdca.priority ?? "medium"]
+  const status = statusConfig[pdca.status]
   const next = nextPdcaStatus(pdca.status)
 
   return (
-    <div className={`${cfg.bg} ${cfg.border} border-2 rounded-sm shadow-md p-4 flex flex-col gap-3 relative min-h-[200px]`}
+    <div className={`${prio.bg} ${prio.border} border-2 rounded-sm shadow-md p-4 flex flex-col gap-3 relative min-h-[200px]`}
          style={{ transform: `rotate(${(Math.abs(pdca.id.charCodeAt(0) % 3) - 1) * 0.8}deg)` }}>
 
-      {/* Status dot + label */}
+      {/* Priority + actions */}
       <div className="flex items-center justify-between">
         <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wide">
-          <span className={`w-2.5 h-2.5 rounded-full ${cfg.dot}`} />
-          {cfg.label}
+          <span className={`w-2.5 h-2.5 rounded-full ${prio.dot}`} />
+          {prio.label}
         </span>
         <div className="flex items-center gap-0.5">
           <button onClick={onEdit} className="p-1 text-slate-500 hover:text-slate-800 transition-colors rounded">
@@ -424,20 +465,30 @@ function StickyPDCA({ pdca, onEdit, onDelete, onAdvance, deleting }: {
         </div>
       )}
 
+      {/* Budget */}
+      {pdca.budget && pdca.budget > 0 && (
+        <p className="text-xs font-semibold text-slate-700">
+          💰 {pdca.budget.toLocaleString("fr-FR")} € estimé
+        </p>
+      )}
+
       {/* Origin */}
       {pdca.origin_label && (
         <p className="text-xs text-slate-500 italic truncate">↩ {pdca.origin_label}</p>
       )}
 
-      {/* Footer */}
+      {/* Footer: status + advance */}
       <div className="flex items-center justify-between pt-1 border-t border-slate-400/20">
-        <span className="text-xs text-slate-500">{format(new Date(pdca.created_at), "dd/MM/yy", { locale: fr })}</span>
+        <span className="flex items-center gap-1 text-xs text-slate-600">
+          <span className={`w-2 h-2 rounded-full ${status.dot}`} />
+          {status.label}
+        </span>
         {next ? (
           <button
             onClick={onAdvance}
             className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-0.5 transition-colors"
           >
-            {cfg.next.replace("→ ", "")} <ChevronRight className="w-3 h-3" />
+            {statusConfig[next].label.replace("En ", "")} <ChevronRight className="w-3 h-3" />
           </button>
         ) : (
           <span className="flex items-center gap-1 text-xs font-bold text-green-700">
