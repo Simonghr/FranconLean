@@ -120,7 +120,27 @@ export default function GxScorePage() {
     ? Math.round(last30Score.critics / last30Score.total * 100)
     : null
 
-  // ── Feedback filters ───────────────────────────────────────────────────────
+  // ── Tag synthesis ─────────────────────────────────────────────────────────
+  const tagSynthesis = (() => {
+    const fanTags: Record<string, number> = {}
+    const criticTags: Record<string, number> = {}
+    for (const r of reviews) {
+      const allReasons = [
+        ...(r.service_rating_reasons ?? []),
+        ...(r.safety_rating_reasons ?? []),
+        ...(r.facilities_rating_reasons ?? []),
+        ...(r.value_rating_reasons ?? []),
+      ]
+      const target = r.is_fan ? fanTags : r.is_critic ? criticTags : null
+      if (!target) continue
+      for (const tag of allReasons) {
+        target[tag] = (target[tag] ?? 0) + 1
+      }
+    }
+    const toSorted = (obj: Record<string, number>) =>
+      Object.entries(obj).sort((a, b) => b[1] - a[1]).slice(0, 8)
+    return { fans: toSorted(fanTags), critics: toSorted(criticTags) }
+  })()
   const filtered = feedbacks.filter(f => {
     const matchSearch = f.description.toLowerCase().includes(search.toLowerCase())
     const matchSentiment = filterSentiment === "all" || f.sentiment === filterSentiment
@@ -213,6 +233,63 @@ export default function GxScorePage() {
 
       {/* GX Evolution chart */}
       <GxChart scores={gxScores} title="Évolution GX Score (30 derniers jours)" />
+
+      {/* Tag synthesis */}
+      {(tagSynthesis.fans.length > 0 || tagSynthesis.critics.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Fans */}
+          <div className="bg-slate-800 border border-green-500/20 rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-green-400 flex items-center gap-2 mb-4">
+              <ThumbsUp className="w-4 h-4" /> Ce qui plaît (Fans)
+            </h3>
+            {tagSynthesis.fans.length === 0
+              ? <p className="text-xs text-slate-500">Pas encore de données</p>
+              : <div className="space-y-2">
+                  {tagSynthesis.fans.map(([tag, count]) => {
+                    const pct = Math.round(count / tagSynthesis.fans[0][1] * 100)
+                    return (
+                      <div key={tag}>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="text-slate-200">{tag}</span>
+                          <span className="text-slate-400">{count}</span>
+                        </div>
+                        <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                          <div className="h-full bg-green-500 rounded-full" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+            }
+          </div>
+
+          {/* Critics */}
+          <div className="bg-slate-800 border border-red-500/20 rounded-xl p-5">
+            <h3 className="text-sm font-semibold text-red-400 flex items-center gap-2 mb-4">
+              <ThumbsDown className="w-4 h-4" /> Ce qui déplaît (Critiques)
+            </h3>
+            {tagSynthesis.critics.length === 0
+              ? <p className="text-xs text-slate-500">Pas encore de données</p>
+              : <div className="space-y-2">
+                  {tagSynthesis.critics.map(([tag, count]) => {
+                    const pct = Math.round(count / tagSynthesis.critics[0][1] * 100)
+                    return (
+                      <div key={tag}>
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="text-slate-200">{tag}</span>
+                          <span className="text-slate-400">{count}</span>
+                        </div>
+                        <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
+                          <div className="h-full bg-red-500 rounded-full" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+            }
+          </div>
+        </div>
+      )}
 
       {/* Roller reviews */}
       {reviews.length > 0 && (
