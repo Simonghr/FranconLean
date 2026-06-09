@@ -251,7 +251,7 @@ export default function GxScorePage() {
                     return (
                       <div key={tag}>
                         <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-slate-200">{translateTag(tag)}</span>
+                          <span className="text-slate-200">{translateTag(tag, true)}</span>
                           <span className="text-slate-400">{count}</span>
                         </div>
                         <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
@@ -277,7 +277,7 @@ export default function GxScorePage() {
                     return (
                       <div key={tag}>
                         <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="text-slate-200">{translateTag(tag)}</span>
+                          <span className="text-slate-200">{translateTag(tag, false)}</span>
                           <span className="text-slate-400">{count}</span>
                         </div>
                         <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
@@ -345,7 +345,7 @@ export default function GxScorePage() {
                           <div className="flex flex-wrap gap-1 mt-1 ml-0.5">
                             {reasons.map((tag, i) => (
                               <span key={i} className="text-xs px-1.5 py-0.5 rounded-full bg-slate-700 text-slate-400 border border-slate-600">
-                                {translateTag(tag)}
+                                {translateTag(tag, r.is_fan)}
                               </span>
                             ))}
                           </div>
