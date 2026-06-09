@@ -6,7 +6,6 @@ import { KPICard } from "@/components/dashboard/KPICard"
 import { InsightsPanel } from "@/components/dashboard/InsightsPanel"
 import { CAChart } from "@/components/charts/CAChart"
 import { IncidentsChart } from "@/components/charts/IncidentsChart"
-import { FeedbackChart } from "@/components/charts/FeedbackChart"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -245,7 +244,7 @@ const gxCalc = (fans: number, critics: number, total: number) =>
       <BriefingHeader briefing={mockBriefing} siteName={mockSite.name} />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <KPICard
           title="CA Aujourd'hui"
           value={loading ? "…" : `${caToday.toLocaleString("fr-FR")} €`}
@@ -261,35 +260,6 @@ const gxCalc = (fans: number, critics: number, total: number) =>
           trend={0}
           trendLabel=""
           status={lastWeekendScore === null ? "warning" : lastWeekendScore.score >= 50 ? "good" : lastWeekendScore.score >= 0 ? "warning" : "critical"}
-        />
-        <KPICard
-          title="GX 30 dernières"
-          value={loading ? "…" : last30Score !== null ? `${last30Score} pts` : "–"}
-          subtitle="30 dernières réponses"
-          trend={0}
-          trendLabel=""
-          status={last30Score === null ? "warning" : last30Score >= 50 ? "good" : last30Score >= 0 ? "warning" : "critical"}
-        />
-        <KPICard
-          title="Incidents Ouverts"
-          value={loading ? "…" : openIncidents.length}
-          subtitle={`${incidents.length} total ce mois`}
-          trend={-15}
-          trendLabel="vs mois dernier"
-          status={openIncidents.length <= 2 ? "good" : openIncidents.length <= 4 ? "warning" : "critical"}
-          footer={`${openIncidents.filter(i => i.impact === "high").length} à fort impact`}
-        />
-        <KPICard
-          title="Retours Clients"
-          value={loading ? "…" : weekFeedback.length}
-          subtitle="Cette semaine"
-          trend={12}
-          trendLabel="vs semaine passée"
-          status={
-            weekFeedback.filter(f => f.sentiment === "positive").length > weekFeedback.length / 2
-              ? "good" : "warning"
-          }
-          footer={`${weekFeedback.filter(f => f.sentiment === "positive").length} positifs`}
         />
 
         {/* Anniversaires prochain week-end */}
@@ -317,15 +287,24 @@ const gxCalc = (fans: number, critics: number, total: number) =>
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-1">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div>
           <CAChart sales={sales} title="CA 14 derniers jours" />
         </div>
-        <div>
-          <IncidentsChart incidents={incidents} title="Incidents par catégorie" />
-        </div>
-        <div>
-          <FeedbackChart feedback={feedback} title="Sentiment clients" />
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-white">Incidents par catégorie</h3>
+            <div className="flex items-center gap-3">
+              <span className={`text-2xl font-bold ${openIncidents.length === 0 ? "text-green-400" : openIncidents.length <= 2 ? "text-orange-400" : "text-red-400"}`}>
+                {openIncidents.length}
+              </span>
+              <div className="text-right">
+                <div className="text-xs text-slate-400">ouverts</div>
+                <div className="text-xs text-slate-500">{openIncidents.filter(i => i.impact === "high").length} fort impact</div>
+              </div>
+            </div>
+          </div>
+          <IncidentsChart incidents={incidents} title="" />
         </div>
       </div>
 
