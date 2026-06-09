@@ -57,6 +57,7 @@ export default function GxScorePage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [filterSentiment, setFilterSentiment] = useState("all")
+  const [filterReviews, setFilterReviews] = useState<"all" | "fan" | "critic">("all")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState({
     description: "", category: "compliment", sentiment: "positive",
@@ -300,10 +301,23 @@ export default function GxScorePage() {
               <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
               Avis clients Roller
             </h2>
-            <span className="text-xs text-slate-500">{reviews.length} avis récents</span>
+            <div className="flex items-center gap-2">
+              {(["all", "fan", "critic"] as const).map(f => (
+                <button key={f} onClick={() => setFilterReviews(f)}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    filterReviews === f
+                      ? f === "fan" ? "bg-green-500/20 text-green-400 border border-green-500/40"
+                        : f === "critic" ? "bg-red-500/20 text-red-400 border border-red-500/40"
+                        : "bg-slate-600 text-white border border-slate-500"
+                      : "bg-slate-800 text-slate-400 border border-slate-700 hover:text-white"
+                  }`}>
+                  {f === "all" ? `Tous (${reviews.length})` : f === "fan" ? `👍 Fans (${reviews.filter(r => r.is_fan).length})` : `👎 Critiques (${reviews.filter(r => r.is_critic).length})`}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {reviews.map(r => {
+            {reviews.filter(r => filterReviews === "all" || (filterReviews === "fan" ? r.is_fan : r.is_critic)).map(r => {
               const overallStars = r.overall_rating ?? (r.is_fan ? 5 : r.is_critic ? 2 : 3)
               const borderColor = r.is_fan ? "border-green-500/30 bg-green-500/5" : r.is_critic ? "border-red-500/30 bg-red-500/5" : "border-slate-700"
               const ratingRows: { label: string; val: number; reasons?: string[]; color: string }[] = [
