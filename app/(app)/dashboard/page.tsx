@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Plus, AlertTriangle, MessageSquare } from "lucide-react"
+import { Plus, AlertTriangle, MessageSquare, PartyPopper } from "lucide-react"
 import { BriefingHeader } from "@/components/dashboard/BriefingHeader"
 import { KPICard } from "@/components/dashboard/KPICard"
 import { InsightsPanel } from "@/components/dashboard/InsightsPanel"
@@ -39,6 +39,7 @@ export default function DashboardPage() {
   const [gxScores, setGxScores] = useState<GxScore[]>([])
   const [gxReviews, setGxReviews] = useState<GxReview[]>([])
   const [gxError, setGxError] = useState<string | null>(null)
+  const [anniversaires, setAnniversaires] = useState<{ sat: number; sun: number; satStr: string; sunStr: string } | null>(null)
   const [feedback, setFeedback] = useState<CustomerFeedback[]>([])
   const [insights, setInsights] = useState<Insight[]>([])
   const [loading, setLoading] = useState(true)
@@ -90,6 +91,34 @@ export default function DashboardPage() {
       } catch (err) {
         console.error('Failed to load GX scores', err)
         setGxError(err instanceof Error ? err.message : String(err))
+      }
+
+      // Anniversaires next weekend
+      try {
+        const today = new Date()
+        const dow = today.getDay() // 0=Sun, 6=Sat
+        const daysToSat = dow === 6 ? 7 : (6 - dow + 7) % 7 || 7
+        const sat = new Date(today); sat.setDate(today.getDate() + daysToSat)
+        const sun = new Date(sat); sun.setDate(sat.getDate() + 1)
+        const satStr = sat.toISOString().split("T")[0]
+        const sunStr = sun.toISOString().split("T")[0]
+
+        const { data } = await import('@/lib/supabase').then(m =>
+          m.supabase.from('bookings')
+            .select('booking_date, quantity')
+            .eq('site_id', SITE_ID)
+            .eq('is_anniversary', true)
+            .in('booking_date', [satStr, sunStr])
+        )
+        const rows = data ?? []
+        setAnniversaires({
+          sat: rows.filter((r: any) => r.booking_date === satStr).reduce((s: number, r: any) => s + (r.quantity ?? 1), 0),
+          sun: rows.filter((r: any) => r.booking_date === sunStr).reduce((s: number, r: any) => s + (r.quantity ?? 1), 0),
+          satStr,
+          sunStr,
+        })
+      } catch (e) {
+        console.error('Failed to load anniversaires', e)
       }
     }
     load()
@@ -215,7 +244,7 @@ const gxCalc = (fans: number, critics: number, total: number) =>
       <BriefingHeader briefing={mockBriefing} siteName={mockSite.name} />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
         <KPICard
           title="CA Aujourd'hui"
           value={loading ? "…" : `${caToday.toLocaleString("fr-FR")} €`}
@@ -261,6 +290,29 @@ const gxCalc = (fans: number, critics: number, total: number) =>
           }
           footer={`${weekFeedback.filter(f => f.sentiment === "positive").length} positifs`}
         />
+
+        {/* Anniversaires prochain week-end */}
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs text-slate-400 uppercase tracking-widest font-semibold">Anniv. Week-end</span>
+            <PartyPopper className="w-4 h-4 text-pink-400" />
+          </div>
+          {anniversaires === null ? (
+            <div className="text-2xl font-bold text-slate-500">–</div>
+          ) : (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-400">Sam {anniversaires.satStr.slice(5).replace("-", "/")}</span>
+                <span className="text-xl font-bold text-pink-400">{anniversaires.sat}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-400">Dim {anniversaires.sunStr.slice(5).replace("-", "/")}</span>
+                <span className="text-xl font-bold text-pink-400">{anniversaires.sun}</span>
+              </div>
+            </div>
+          )}
+          <div className="text-xs text-slate-500 mt-1">Réservations Roller</div>
+        </div>
       </div>
 
       {/* Charts */}
