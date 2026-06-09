@@ -129,20 +129,52 @@ Deno.serve(async (req) => {
       const fans = items.filter((r: any) => r?.isFan === true).length
       const critics = items.filter((r: any) => r?.isCritic === true).length
 
-      // Try fetching detail endpoint for first item
-      let detailResult: any = null
-      let customerResult: any = null
-      if (sample?.gxsResponseId) {
-        const detailRes = await fetch(`${ROLLER_BASE}/reporting/gxs/${sample.gxsResponseId}`, {
+      const probe = async (path: string) => {
+        const res = await fetch(`${ROLLER_BASE}${path}`, {
           headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
         })
-        detailResult = { status: detailRes.status, body: await detailRes.text().then(t => { try { return JSON.parse(t) } catch { return t } }) }
+        const text = await res.text()
+        let body: any
+        try { body = JSON.parse(text) } catch { body = text.slice(0, 500) }
+        return { status: res.status, body }
       }
-      if (sample?.customerId) {
-        const custRes = await fetch(`${ROLLER_BASE}/customers/${sample.customerId}`, {
-          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-        })
-        customerResult = { status: custRes.status, body: await custRes.text().then(t => { try { return JSON.parse(t) } catch { return t } }) }
+
+      // Probe known endpoints and try to find all rating categories / comments
+      const [
+        detailResult,
+        customerResult,
+        bookingResult,
+        reviewsResult,
+        feedbackResult,
+        surveysResult,
+        gxListFull,
+      ] = await Promise.all([
+        sample?.gxsResponseId ? probe(`/reporting/gxs/${sample.gxsResponseId}`) : Promise.resolve(null),
+        sample?.customerId    ? probe(`/customers/${sample.customerId}`) : Promise.resolve(null),
+        sample?.bookingReference ? probe(`/bookings/${sample.bookingReference}`) : Promise.resolve(null),
+        sample?.customerId    ? probe(`/customers/${sample.customerId}/reviews`) : Promise.resolve(null),
+        sample?.customerId    ? probe(`/customers/${sample.customerId}/feedback`) : Promise.resolve(null),
+        probe(`/reporting/surveys?startDate=${startDate}&endDate=${ymd(new Date(new Date(startDate).getTime() + DAY_MS))}&pageNumber=1&pageSize=5`),
+        probe(`/reporting/gxs?startDate=${startDate}&endDate=${ymd(new Date(new Date(startDate).getTime() + DAY_MS))}&pageNumber=1&pageSize=1`),
+      ])
+
+      // Collect all unique field names across all items to reveal hidden fields
+      const allFields = new Set<string>()
+      for (const item of items) Object.keys(item).forEach(k => allFields.add(k))
+
+      // Check if any item has text/comment fields
+      const textFields = [...allFields].filter(k => {
+        const lower = k.toLowerCase()
+        return lower.includes("comment") || lower.includes("text") || lower.includes("note")
+          || lower.includes("feedback") || lower.includes("review") || lower.includes("message")
+          || lower.includes("rating") || lower.includes("reason") || lower.includes("score")
+      })
+
+      // Sample non-null values for all fields
+      const fieldSamples: Record<string, any> = {}
+      for (const field of allFields) {
+        const val = items.find((it: any) => it[field] != null && it[field] !== "")?.[field]
+        if (val !== undefined) fieldSamples[field] = val
       }
 
       return new Response(
@@ -155,10 +187,19 @@ Deno.serve(async (req) => {
             fans,
             critics,
             computedScoreForDay: items.length ? r2(((fans - critics) / items.length) * 100) : null,
-            firstItemFields: sample ? Object.keys(sample) : [],
+            allFields: [...allFields],
+            textAndRatingFields: textFields,
+            fieldSamples,
             firstItem: sample,
-            detailEndpoint: detailResult,
-            customerEndpoint: customerResult,
+            endpoints: {
+              detail:    detailResult,
+              customer:  customerResult,
+              booking:   bookingResult,
+              reviews:   reviewsResult,
+              feedback:  feedbackResult,
+              surveys:   surveysResult,
+              gxListRaw: gxListFull,
+            },
           },
           null,
           2
