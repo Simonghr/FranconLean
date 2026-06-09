@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Plus, Search, AlertTriangle, Pencil, ArrowRight, MapPin, Clock, User } from "lucide-react"
+import { Plus, Search, AlertTriangle, Pencil, ArrowRight, MapPin, Clock, User, Trash2 } from "lucide-react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { Badge } from "@/components/ui/badge"
@@ -233,6 +233,14 @@ export default function IncidentsPage() {
     } catch (err) { console.error(err) }
   }
 
+  const handleDelete = async (inc: Incident) => {
+    if (!confirm(`Supprimer cet incident ?\n"${inc.description.slice(0, 80)}"`)) return
+    try {
+      await incidentsRepo.remove(inc.id)
+      setIncidents(prev => prev.filter(i => i.id !== inc.id))
+    } catch (err) { console.error(err) }
+  }
+
   const handleStatusChange = async (inc: Incident, status: IncidentStatus) => {
     try {
       const updated = await incidentsRepo.update(inc.id, { status })
@@ -418,6 +426,14 @@ export default function IncidentsPage() {
                           title="Modifier"
                         >
                           <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          size="sm" variant="ghost"
+                          className="h-7 w-7 p-0 text-slate-600 hover:text-red-400 transition-colors"
+                          onClick={() => handleDelete(inc)}
+                          title="Supprimer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                         {next && (
                           <Button
