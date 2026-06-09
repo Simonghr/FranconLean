@@ -1,11 +1,10 @@
 "use client"
 import { useState, useEffect, useCallback, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { RefreshCw, Lightbulb, Plus, Pencil, Trash2, ArrowRight, ChevronRight, CheckCircle2 } from "lucide-react"
+import { RefreshCw, Lightbulb, Plus, Pencil, Trash2, ChevronRight, CheckCircle2 } from "lucide-react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -16,22 +15,16 @@ import type { PDCA, PDCAStatus, Kaizen, KaizenStatus } from "@/lib/types"
 
 const SITE_ID = '00000000-0000-0000-0000-000000000001'
 
-// ── PDCA ────────────────────────────────────────────────────────────────────
+// ── PDCA statuses ─────────────────────────────────────────────────────────────
 
 const PDCA_STATUSES: PDCAStatus[] = ['plan', 'do', 'check', 'act']
 
-const pdcaStatusConfig: Record<PDCAStatus, { label: string; color: string; bg: string; border: string; headerBg: string }> = {
-  plan:  { label: "PLAN",  color: "text-blue-400",   bg: "bg-blue-500/10",   border: "border-blue-500/30",   headerBg: "bg-blue-600" },
-  do:    { label: "DO",    color: "text-yellow-400",  bg: "bg-yellow-500/10", border: "border-yellow-500/30", headerBg: "bg-yellow-500" },
-  check: { label: "CHECK", color: "text-orange-400",  bg: "bg-orange-500/10", border: "border-orange-500/30", headerBg: "bg-orange-500" },
-  act:   { label: "ACT",   color: "text-green-400",   bg: "bg-green-500/10",  border: "border-green-500/30",  headerBg: "bg-green-600" },
-}
-
-const pdcaStatusDesc: Record<PDCAStatus, string> = {
-  plan:  "Identifier le problème & planifier",
-  do:    "Mettre en œuvre l'action",
-  check: "Vérifier les résultats",
-  act:   "Standardiser & pérenniser",
+// Post-it colors per status
+const stickyColor: Record<PDCAStatus, { bg: string; border: string; dot: string; label: string; next: string }> = {
+  plan:  { bg: "bg-[#fde68a]", border: "border-yellow-300",  dot: "bg-yellow-500",  label: "En recherche de solution", next: "→ En test" },
+  do:    { bg: "bg-[#fed7aa]", border: "border-orange-300",  dot: "bg-orange-500",  label: "En test",                  next: "→ En cours de validation" },
+  check: { bg: "bg-[#bfdbfe]", border: "border-blue-300",    dot: "bg-blue-500",    label: "En cours de validation",   next: "→ Validé / Standardisé" },
+  act:   { bg: "bg-[#bbf7d0]", border: "border-green-300",   dot: "bg-green-600",   label: "Validé / Standardisé",     next: "" },
 }
 
 const nextPdcaStatus = (s: PDCAStatus): PDCAStatus | null => {
@@ -39,32 +32,28 @@ const nextPdcaStatus = (s: PDCAStatus): PDCAStatus | null => {
   return idx < PDCA_STATUSES.length - 1 ? PDCA_STATUSES[idx + 1] : null
 }
 
-const blankPdca = (overrides?: Partial<PDCAFormState>): PDCAFormState => ({
-  problem: "", objective: "", action: "", result: "", standardization: "", status: "plan",
-  origin_label: "", origin_id: "",
-  ...overrides,
-})
-
 type PDCAFormState = {
-  problem: string; objective: string; action: string; result: string; standardization: string
+  problem: string; action: string; result: string; standardization: string
   status: PDCAStatus; origin_label?: string; origin_id?: string
 }
+const blankPdca = (o?: Partial<PDCAFormState>): PDCAFormState => ({
+  problem: "", action: "", result: "", standardization: "", status: "plan",
+  origin_label: "", origin_id: "", ...o,
+})
 
-// ── Kaizen ──────────────────────────────────────────────────────────────────
+// ── Kaizen ────────────────────────────────────────────────────────────────────
 
-const kaizenStatusConfig: Record<KaizenStatus, { label: string; color: string; bg: string }> = {
-  idea:        { label: "Idée",         color: "text-yellow-400",  bg: "bg-yellow-500/10" },
-  in_progress: { label: "En cours",     color: "text-blue-400",    bg: "bg-blue-500/10" },
-  implemented: { label: "Implémentée",  color: "text-green-400",   bg: "bg-green-500/10" },
-  rejected:    { label: "Rejetée",      color: "text-slate-400",   bg: "bg-slate-500/10" },
+const kaizenStickyColor: Record<KaizenStatus, { bg: string; border: string; dot: string; label: string }> = {
+  idea:        { bg: "bg-[#fef9c3]", border: "border-yellow-200",  dot: "bg-yellow-400",  label: "Idée" },
+  in_progress: { bg: "bg-[#dbeafe]", border: "border-blue-200",    dot: "bg-blue-500",    label: "En cours" },
+  implemented: { bg: "bg-[#dcfce7]", border: "border-green-200",   dot: "bg-green-500",   label: "Implémentée" },
+  rejected:    { bg: "bg-[#f1f5f9]", border: "border-slate-200",   dot: "bg-slate-400",   label: "Rejetée" },
 }
 
-type KaizenFormState = {
-  description: string; estimated_gain: string; status: KaizenStatus; author: string
-}
+type KaizenFormState = { description: string; estimated_gain: string; status: KaizenStatus; author: string }
 const blankKaizen = (): KaizenFormState => ({ description: "", estimated_gain: "0", status: "idea", author: "" })
 
-// ── Component ────────────────────────────────────────────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function LeanPage() {
   return (
@@ -82,14 +71,12 @@ function LeanPageInner() {
   const [kaizens, setKaizens] = useState<Kaizen[]>([])
   const [loading, setLoading] = useState(true)
 
-  // PDCA modal
   const [pdcaOpen, setPdcaOpen] = useState(false)
   const [pdcaForm, setPdcaForm] = useState<PDCAFormState>(blankPdca())
   const [editingPdca, setEditingPdca] = useState<PDCA | null>(null)
   const [savingPdca, setSavingPdca] = useState(false)
   const [deletingPdcaId, setDeletingPdcaId] = useState<string | null>(null)
 
-  // Kaizen modal
   const [kaizenOpen, setKaizenOpen] = useState(false)
   const [kaizenForm, setKaizenForm] = useState<KaizenFormState>(blankKaizen())
   const [editingKaizen, setEditingKaizen] = useState<Kaizen | null>(null)
@@ -100,15 +87,13 @@ function LeanPageInner() {
     setLoading(true)
     try {
       const [p, k] = await Promise.all([pdcaRepo.getAll(SITE_ID), kaizenRepo.getAll(SITE_ID)])
-      setPdcas(p)
-      setKaizens(k)
+      setPdcas(p); setKaizens(k)
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
   }, [])
 
   useEffect(() => { load() }, [load])
 
-  // Auto-open PDCA modal if URL params present (from incident or kaizen)
   useEffect(() => {
     const problem = searchParams.get("problem")
     const origin_label = searchParams.get("origin_label")
@@ -117,56 +102,34 @@ function LeanPageInner() {
       setPdcaForm(blankPdca({ problem, origin_label: origin_label ?? "", origin_id: origin_id ?? "" }))
       setEditingPdca(null)
       setPdcaOpen(true)
-      // Clean URL without navigation
       const url = new URL(window.location.href)
-      url.searchParams.delete("problem")
-      url.searchParams.delete("origin_label")
-      url.searchParams.delete("origin_id")
+      url.searchParams.delete("problem"); url.searchParams.delete("origin_label"); url.searchParams.delete("origin_id")
       window.history.replaceState({}, "", url.toString())
     }
   }, [searchParams])
 
-  // ── PDCA handlers ──────────────────────────────────────────────────────────
-
-  const openNewPdca = () => {
-    setEditingPdca(null)
-    setPdcaForm(blankPdca())
-    setPdcaOpen(true)
-  }
+  // ── PDCA handlers ─────────────────────────────────────────────────────────
 
   const openEditPdca = (p: PDCA) => {
     setEditingPdca(p)
-    setPdcaForm({
-      problem: p.problem, objective: p.objective, action: p.action,
-      result: p.result, standardization: p.standardization, status: p.status,
-      origin_label: p.origin_label ?? "", origin_id: p.origin_id ?? "",
-    })
+    setPdcaForm({ problem: p.problem, action: p.action, result: p.result, standardization: p.standardization, status: p.status, origin_label: p.origin_label ?? "", origin_id: p.origin_id ?? "" })
     setPdcaOpen(true)
   }
 
   const savePdca = async () => {
     setSavingPdca(true)
     try {
-      const payload = {
-        site_id: SITE_ID,
-        problem: pdcaForm.problem,
-        objective: pdcaForm.objective,
-        action: pdcaForm.action,
-        result: pdcaForm.result,
-        standardization: pdcaForm.standardization,
-        status: pdcaForm.status,
-        origin_label: pdcaForm.origin_label || undefined,
-        origin_id: pdcaForm.origin_id || undefined,
-      }
-      if (editingPdca) {
-        await pdcaRepo.update(editingPdca.id, payload)
-      } else {
-        await pdcaRepo.create(payload)
-      }
-      setPdcaOpen(false)
-      await load()
+      const payload = { site_id: SITE_ID, problem: pdcaForm.problem, objective: "", action: pdcaForm.action, result: pdcaForm.result, standardization: pdcaForm.standardization, status: pdcaForm.status, origin_label: pdcaForm.origin_label || undefined, origin_id: pdcaForm.origin_id || undefined }
+      editingPdca ? await pdcaRepo.update(editingPdca.id, payload) : await pdcaRepo.create(payload)
+      setPdcaOpen(false); await load()
     } catch (err) { console.error(err) }
     finally { setSavingPdca(false) }
+  }
+
+  const advancePdca = async (p: PDCA) => {
+    const next = nextPdcaStatus(p.status)
+    if (!next) return
+    await pdcaRepo.update(p.id, { status: next }); await load()
   }
 
   const deletePdca = async (id: string) => {
@@ -176,47 +139,20 @@ function LeanPageInner() {
     finally { setDeletingPdcaId(null) }
   }
 
-  const advancePdca = async (p: PDCA) => {
-    const next = nextPdcaStatus(p.status)
-    if (!next) return
-    await pdcaRepo.update(p.id, { status: next })
-    await load()
-  }
-
-  // ── Kaizen handlers ────────────────────────────────────────────────────────
-
-  const openNewKaizen = () => {
-    setEditingKaizen(null)
-    setKaizenForm(blankKaizen())
-    setKaizenOpen(true)
-  }
+  // ── Kaizen handlers ───────────────────────────────────────────────────────
 
   const openEditKaizen = (k: Kaizen) => {
     setEditingKaizen(k)
-    setKaizenForm({
-      description: k.description, estimated_gain: String(k.estimated_gain),
-      status: k.status, author: k.author,
-    })
+    setKaizenForm({ description: k.description, estimated_gain: String(k.estimated_gain), status: k.status, author: k.author })
     setKaizenOpen(true)
   }
 
   const saveKaizen = async () => {
     setSavingKaizen(true)
     try {
-      const payload = {
-        site_id: SITE_ID,
-        description: kaizenForm.description,
-        estimated_gain: Number(kaizenForm.estimated_gain) || 0,
-        status: kaizenForm.status,
-        author: kaizenForm.author,
-      }
-      if (editingKaizen) {
-        await kaizenRepo.update(editingKaizen.id, payload)
-      } else {
-        await kaizenRepo.create(payload)
-      }
-      setKaizenOpen(false)
-      await load()
+      const payload = { site_id: SITE_ID, description: kaizenForm.description, estimated_gain: Number(kaizenForm.estimated_gain) || 0, status: kaizenForm.status, author: kaizenForm.author }
+      editingKaizen ? await kaizenRepo.update(editingKaizen.id, payload) : await kaizenRepo.create(payload)
+      setKaizenOpen(false); await load()
     } catch (err) { console.error(err) }
     finally { setSavingKaizen(false) }
   }
@@ -229,90 +165,71 @@ function LeanPageInner() {
   }
 
   const kaizenToPdca = (k: Kaizen) => {
-    const params = new URLSearchParams({
-      problem: k.description,
-      origin_label: `Amélioration continue : ${k.description.slice(0, 60)}`,
-      origin_id: k.id,
-    })
+    const params = new URLSearchParams({ problem: k.description, origin_label: `Amélioration : ${k.description.slice(0, 60)}`, origin_id: k.id })
     router.push(`/lean?${params.toString()}`)
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-
-  const pdcaByStatus = (s: PDCAStatus) => pdcas.filter(p => p.status === s)
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-8 max-w-[1600px]">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <RefreshCw className="w-6 h-6 text-blue-400" />
-            Lean Tools
-          </h1>
-          <p className="text-slate-400 text-sm mt-1">PDCA · Amélioration continue — Approche Michael Ballé</p>
-        </div>
-      </div>
+    <div className="space-y-10 max-w-[1600px]">
 
-      {/* ── PDCA Section ── */}
+      {/* ── PDCA Board ── */}
       <section>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-lg font-semibold text-white">PDCA — Résolution de problèmes</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Plan · Do · Check · Act</p>
+            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+              <RefreshCw className="w-6 h-6 text-blue-400" />
+              PDCA — Résolution de problèmes
+            </h1>
+            <p className="text-slate-400 text-sm mt-1">1 problème = 1 post-it · Cliquez sur la flèche pour faire avancer le sujet</p>
           </div>
-          <Button onClick={openNewPdca} size="sm" className="bg-blue-600 hover:bg-blue-700 text-white gap-2">
-            <Plus className="w-4 h-4" /> Nouveau PDCA
+          <Button
+            onClick={() => { setEditingPdca(null); setPdcaForm(blankPdca()); setPdcaOpen(true) }}
+            size="sm"
+            className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+          >
+            <Plus className="w-4 h-4" /> Nouveau problème
           </Button>
         </div>
 
         {loading ? (
-          <div className="text-center py-10 text-slate-500">Chargement…</div>
+          <div className="text-center py-16 text-slate-500">Chargement…</div>
+        ) : pdcas.length === 0 ? (
+          <div className="border-2 border-dashed border-slate-700 rounded-2xl p-12 text-center">
+            <p className="text-slate-500 text-sm">Aucun problème en cours. Créez votre premier post-it !</p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {PDCA_STATUSES.map(status => {
-              const cfg = pdcaStatusConfig[status]
-              const items = pdcaByStatus(status)
-              return (
-                <div key={status} className={`bg-slate-800 border ${cfg.border} rounded-xl overflow-hidden`}>
-                  <div className={`${cfg.headerBg} px-4 py-2.5 flex items-center justify-between`}>
-                    <span className="text-sm font-bold text-white">{cfg.label}</span>
-                    <span className="text-xs text-white/70 bg-white/20 rounded-full px-2 py-0.5">{items.length}</span>
-                  </div>
-                  <div className="text-xs text-slate-500 px-4 py-2 border-b border-slate-700/50">{pdcaStatusDesc[status]}</div>
-                  <div className="p-3 space-y-2 min-h-[120px]">
-                    {items.length === 0 && (
-                      <p className="text-xs text-slate-600 text-center py-4">Aucun PDCA</p>
-                    )}
-                    {items.map(p => (
-                      <PDCACard
-                        key={p.id}
-                        pdca={p}
-                        onEdit={() => openEditPdca(p)}
-                        onDelete={() => deletePdca(p.id)}
-                        onAdvance={() => advancePdca(p)}
-                        deleting={deletingPdcaId === p.id}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )
-            })}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+            {pdcas.map(p => (
+              <StickyPDCA
+                key={p.id}
+                pdca={p}
+                onEdit={() => openEditPdca(p)}
+                onDelete={() => deletePdca(p.id)}
+                onAdvance={() => advancePdca(p)}
+                deleting={deletingPdcaId === p.id}
+              />
+            ))}
           </div>
         )}
       </section>
 
-      {/* ── Améliorations Continues Section ── */}
+      {/* ── Améliorations Continues ── */}
       <section>
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
               <Lightbulb className="w-5 h-5 text-yellow-400" />
               Améliorations Continues
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">Idées de petites améliorations — Kaizen</p>
+            <p className="text-slate-400 text-sm mt-1">Idées Kaizen · Petits changements, grands résultats</p>
           </div>
-          <Button onClick={openNewKaizen} size="sm" className="bg-yellow-600 hover:bg-yellow-700 text-white gap-2">
+          <Button
+            onClick={() => { setEditingKaizen(null); setKaizenForm(blankKaizen()); setKaizenOpen(true) }}
+            size="sm"
+            className="bg-yellow-500 hover:bg-yellow-400 text-slate-900 gap-2 font-semibold"
+          >
             <Plus className="w-4 h-4" /> Nouvelle idée
           </Button>
         </div>
@@ -320,14 +237,14 @@ function LeanPageInner() {
         {loading ? (
           <div className="text-center py-10 text-slate-500">Chargement…</div>
         ) : kaizens.length === 0 ? (
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-8 text-center">
-            <Lightbulb className="w-8 h-8 text-yellow-400/40 mx-auto mb-2" />
-            <p className="text-sm text-slate-400">Aucune idée d'amélioration pour le moment.</p>
+          <div className="border-2 border-dashed border-slate-700 rounded-2xl p-12 text-center">
+            <Lightbulb className="w-8 h-8 text-yellow-400/30 mx-auto mb-2" />
+            <p className="text-slate-500 text-sm">Aucune idée pour le moment.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
             {kaizens.map(k => (
-              <KaizenCard
+              <StickyKaizen
                 key={k.id}
                 kaizen={k}
                 onEdit={() => openEditKaizen(k)}
@@ -344,87 +261,76 @@ function LeanPageInner() {
       <Dialog open={pdcaOpen} onOpenChange={setPdcaOpen}>
         <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingPdca ? "Modifier le PDCA" : "Nouveau PDCA"}</DialogTitle>
+            <DialogTitle className="text-lg">{editingPdca ? "Modifier le post-it" : "Nouveau problème"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             {pdcaForm.origin_label && (
               <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2 text-xs text-blue-300">
-                Origine : {pdcaForm.origin_label}
+                ↩ Origine : {pdcaForm.origin_label}
               </div>
             )}
             <div className="space-y-1.5">
-              <Label className="text-slate-300">Problème <span className="text-red-400">*</span></Label>
+              <Label className="text-slate-300 font-semibold">Problème <span className="text-red-400">*</span></Label>
               <Textarea
-                className="bg-slate-800 border-slate-700 text-white resize-none"
+                className="bg-slate-800 border-slate-700 text-white resize-none text-sm"
                 rows={3}
-                placeholder="Décrivez le problème observé…"
+                placeholder="Quel est le problème observé ?"
                 value={pdcaForm.problem}
                 onChange={e => setPdcaForm(f => ({ ...f, problem: e.target.value }))}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-slate-300">Objectif (PLAN)</Label>
+              <Label className="text-slate-300 font-semibold">Solution proposée / Action mise en place</Label>
               <Textarea
-                className="bg-slate-800 border-slate-700 text-white resize-none"
+                className="bg-slate-800 border-slate-700 text-white resize-none text-sm"
                 rows={2}
-                placeholder="Quel est l'objectif visé ?"
-                value={pdcaForm.objective}
-                onChange={e => setPdcaForm(f => ({ ...f, objective: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-slate-300">Action mise en place (DO)</Label>
-              <Textarea
-                className="bg-slate-800 border-slate-700 text-white resize-none"
-                rows={2}
-                placeholder="Qu'est-ce qui a été mis en place ?"
+                placeholder="Quelle solution a été testée ?"
                 value={pdcaForm.action}
                 onChange={e => setPdcaForm(f => ({ ...f, action: e.target.value }))}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-slate-300">Résultats observés (CHECK)</Label>
+              <Label className="text-slate-300 font-semibold">Résultat du test</Label>
               <Textarea
-                className="bg-slate-800 border-slate-700 text-white resize-none"
+                className="bg-slate-800 border-slate-700 text-white resize-none text-sm"
                 rows={2}
-                placeholder="Quels résultats a-t-on observé ?"
+                placeholder="Qu'est-ce qu'on a observé ?"
                 value={pdcaForm.result}
                 onChange={e => setPdcaForm(f => ({ ...f, result: e.target.value }))}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-slate-300">Standardisation (ACT)</Label>
+              <Label className="text-slate-300 font-semibold">Standardisation</Label>
               <Textarea
-                className="bg-slate-800 border-slate-700 text-white resize-none"
+                className="bg-slate-800 border-slate-700 text-white resize-none text-sm"
                 rows={2}
-                placeholder="Qu'est-ce qui est standardisé ? (ou pourquoi on ne standardise pas)"
+                placeholder="On standardise ? Comment ? (ou pourquoi pas)"
                 value={pdcaForm.standardization}
                 onChange={e => setPdcaForm(f => ({ ...f, standardization: e.target.value }))}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-slate-300">Étape</Label>
+              <Label className="text-slate-300 font-semibold">Avancement</Label>
               <Select value={pdcaForm.status} onValueChange={v => setPdcaForm(f => ({ ...f, status: v as PDCAStatus }))}>
                 <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700 text-white">
                   {PDCA_STATUSES.map(s => (
-                    <SelectItem key={s} value={s}>{pdcaStatusConfig[s].label} — {pdcaStatusDesc[s]}</SelectItem>
+                    <SelectItem key={s} value={s}>
+                      <span className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full inline-block ${stickyColor[s].dot}`} />
+                        {stickyColor[s].label}
+                      </span>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPdcaOpen(false)} className="border-slate-700 text-slate-300">
-              Annuler
-            </Button>
-            <Button
-              onClick={savePdca}
-              disabled={savingPdca || !pdcaForm.problem.trim()}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
+            <Button variant="outline" onClick={() => setPdcaOpen(false)} className="border-slate-700 text-slate-300">Annuler</Button>
+            <Button onClick={savePdca} disabled={savingPdca || !pdcaForm.problem.trim()} className="bg-blue-600 hover:bg-blue-700 text-white">
               {savingPdca ? "Enregistrement…" : editingPdca ? "Mettre à jour" : "Créer"}
             </Button>
           </DialogFooter>
@@ -435,61 +341,41 @@ function LeanPageInner() {
       <Dialog open={kaizenOpen} onOpenChange={setKaizenOpen}>
         <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingKaizen ? "Modifier l'amélioration" : "Nouvelle idée d'amélioration"}</DialogTitle>
+            <DialogTitle>{editingKaizen ? "Modifier l'idée" : "Nouvelle idée d'amélioration"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label className="text-slate-300">Description <span className="text-red-400">*</span></Label>
-              <Textarea
-                className="bg-slate-800 border-slate-700 text-white resize-none"
-                rows={3}
-                placeholder="Décrivez l'idée d'amélioration…"
-                value={kaizenForm.description}
-                onChange={e => setKaizenForm(f => ({ ...f, description: e.target.value }))}
-              />
+              <Label className="text-slate-300 font-semibold">Description <span className="text-red-400">*</span></Label>
+              <Textarea className="bg-slate-800 border-slate-700 text-white resize-none" rows={3} placeholder="Décrivez l'idée…" value={kaizenForm.description} onChange={e => setKaizenForm(f => ({ ...f, description: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-slate-300">Auteur</Label>
-              <Input
-                className="bg-slate-800 border-slate-700 text-white"
-                placeholder="Nom de l'auteur"
-                value={kaizenForm.author}
-                onChange={e => setKaizenForm(f => ({ ...f, author: e.target.value }))}
-              />
+              <Label className="text-slate-300 font-semibold">Auteur</Label>
+              <input className="w-full rounded-md bg-slate-800 border border-slate-700 text-white px-3 py-2 text-sm" placeholder="Nom" value={kaizenForm.author} onChange={e => setKaizenForm(f => ({ ...f, author: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-slate-300">Gain estimé (€)</Label>
-              <Input
-                type="number"
-                className="bg-slate-800 border-slate-700 text-white"
-                placeholder="0"
-                value={kaizenForm.estimated_gain}
-                onChange={e => setKaizenForm(f => ({ ...f, estimated_gain: e.target.value }))}
-              />
+              <Label className="text-slate-300 font-semibold">Gain estimé (€)</Label>
+              <input type="number" className="w-full rounded-md bg-slate-800 border border-slate-700 text-white px-3 py-2 text-sm" placeholder="0" value={kaizenForm.estimated_gain} onChange={e => setKaizenForm(f => ({ ...f, estimated_gain: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-slate-300">Statut</Label>
+              <Label className="text-slate-300 font-semibold">Statut</Label>
               <Select value={kaizenForm.status} onValueChange={v => setKaizenForm(f => ({ ...f, status: v as KaizenStatus }))}>
-                <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="bg-slate-800 border-slate-700 text-white"><SelectValue /></SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-700 text-white">
-                  {(Object.keys(kaizenStatusConfig) as KaizenStatus[]).map(s => (
-                    <SelectItem key={s} value={s}>{kaizenStatusConfig[s].label}</SelectItem>
+                  {(Object.keys(kaizenStickyColor) as KaizenStatus[]).map(s => (
+                    <SelectItem key={s} value={s}>
+                      <span className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full inline-block ${kaizenStickyColor[s].dot}`} />
+                        {kaizenStickyColor[s].label}
+                      </span>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setKaizenOpen(false)} className="border-slate-700 text-slate-300">
-              Annuler
-            </Button>
-            <Button
-              onClick={saveKaizen}
-              disabled={savingKaizen || !kaizenForm.description.trim()}
-              className="bg-yellow-600 hover:bg-yellow-700 text-white"
-            >
+            <Button variant="outline" onClick={() => setKaizenOpen(false)} className="border-slate-700 text-slate-300">Annuler</Button>
+            <Button onClick={saveKaizen} disabled={savingKaizen || !kaizenForm.description.trim()} className="bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-semibold">
               {savingKaizen ? "Enregistrement…" : editingKaizen ? "Mettre à jour" : "Créer"}
             </Button>
           </DialogFooter>
@@ -499,48 +385,63 @@ function LeanPageInner() {
   )
 }
 
-// ── Sub-components ───────────────────────────────────────────────────────────
+// ── Post-it PDCA ──────────────────────────────────────────────────────────────
 
-function PDCACard({ pdca, onEdit, onDelete, onAdvance, deleting }: {
+function StickyPDCA({ pdca, onEdit, onDelete, onAdvance, deleting }: {
   pdca: PDCA; onEdit: () => void; onDelete: () => void; onAdvance: () => void; deleting: boolean
 }) {
+  const cfg = stickyColor[pdca.status]
   const next = nextPdcaStatus(pdca.status)
+
   return (
-    <div className="bg-slate-900/60 border border-slate-700/50 rounded-lg p-3 space-y-2">
-      {pdca.origin_label && (
-        <div className="text-xs text-blue-400/70 truncate">↩ {pdca.origin_label}</div>
+    <div className={`${cfg.bg} ${cfg.border} border-2 rounded-sm shadow-md p-4 flex flex-col gap-3 relative min-h-[200px]`}
+         style={{ transform: `rotate(${(Math.abs(pdca.id.charCodeAt(0) % 3) - 1) * 0.8}deg)` }}>
+
+      {/* Status dot + label */}
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wide">
+          <span className={`w-2.5 h-2.5 rounded-full ${cfg.dot}`} />
+          {cfg.label}
+        </span>
+        <div className="flex items-center gap-0.5">
+          <button onClick={onEdit} className="p-1 text-slate-500 hover:text-slate-800 transition-colors rounded">
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={onDelete} disabled={deleting} className="p-1 text-slate-400 hover:text-red-600 transition-colors rounded">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Problème */}
+      <p className="text-sm font-bold text-slate-800 leading-snug flex-1">{pdca.problem}</p>
+
+      {/* Solution */}
+      {pdca.action && (
+        <div className="border-t border-slate-400/30 pt-2">
+          <p className="text-xs text-slate-600 font-semibold uppercase tracking-wide mb-1">Solution</p>
+          <p className="text-xs text-slate-700 leading-relaxed line-clamp-3">{pdca.action}</p>
+        </div>
       )}
-      <p className="text-xs text-slate-200 line-clamp-3 leading-relaxed">{pdca.problem}</p>
-      <p className="text-xs text-slate-500">{format(new Date(pdca.created_at), "dd/MM/yy", { locale: fr })}</p>
-      <div className="flex items-center gap-1 pt-1">
-        <button
-          onClick={onEdit}
-          className="p-1 text-slate-500 hover:text-blue-400 transition-colors"
-          title="Modifier"
-        >
-          <Pencil className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={onDelete}
-          disabled={deleting}
-          className="p-1 text-slate-500 hover:text-red-400 transition-colors"
-          title="Supprimer"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-        {next && (
+
+      {/* Origin */}
+      {pdca.origin_label && (
+        <p className="text-xs text-slate-500 italic truncate">↩ {pdca.origin_label}</p>
+      )}
+
+      {/* Footer */}
+      <div className="flex items-center justify-between pt-1 border-t border-slate-400/20">
+        <span className="text-xs text-slate-500">{format(new Date(pdca.created_at), "dd/MM/yy", { locale: fr })}</span>
+        {next ? (
           <button
             onClick={onAdvance}
-            className="ml-auto flex items-center gap-1 text-xs text-slate-400 hover:text-green-400 transition-colors"
-            title={`Passer à ${pdcaStatusConfig[next].label}`}
+            className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-0.5 transition-colors"
           >
-            <span>{pdcaStatusConfig[next].label}</span>
-            <ArrowRight className="w-3 h-3" />
+            {cfg.next.replace("→ ", "")} <ChevronRight className="w-3 h-3" />
           </button>
-        )}
-        {!next && (
-          <span className="ml-auto flex items-center gap-1 text-xs text-green-400">
-            <CheckCircle2 className="w-3 h-3" /> Terminé
+        ) : (
+          <span className="flex items-center gap-1 text-xs font-bold text-green-700">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Terminé
           </span>
         )}
       </div>
@@ -548,42 +449,47 @@ function PDCACard({ pdca, onEdit, onDelete, onAdvance, deleting }: {
   )
 }
 
-function KaizenCard({ kaizen, onEdit, onDelete, onToPdca, deleting }: {
+// ── Post-it Kaizen ────────────────────────────────────────────────────────────
+
+function StickyKaizen({ kaizen, onEdit, onDelete, onToPdca, deleting }: {
   kaizen: Kaizen; onEdit: () => void; onDelete: () => void; onToPdca: () => void; deleting: boolean
 }) {
-  const cfg = kaizenStatusConfig[kaizen.status]
+  const cfg = kaizenStickyColor[kaizen.status]
+
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3">
-      <div className="flex items-start justify-between gap-2">
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}>
+    <div className={`${cfg.bg} ${cfg.border} border-2 rounded-sm shadow-md p-4 flex flex-col gap-3 min-h-[160px]`}
+         style={{ transform: `rotate(${(Math.abs(kaizen.id.charCodeAt(0) % 3) - 1) * 0.6}deg)` }}>
+
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase tracking-wide">
+          <span className={`w-2.5 h-2.5 rounded-full ${cfg.dot}`} />
           {cfg.label}
         </span>
-        <div className="flex items-center gap-1">
-          <button onClick={onEdit} className="p-1 text-slate-500 hover:text-blue-400 transition-colors">
+        <div className="flex items-center gap-0.5">
+          <button onClick={onEdit} className="p-1 text-slate-500 hover:text-slate-800 transition-colors rounded">
             <Pencil className="w-3.5 h-3.5" />
           </button>
-          <button onClick={onDelete} disabled={deleting} className="p-1 text-slate-500 hover:text-red-400 transition-colors">
+          <button onClick={onDelete} disabled={deleting} className="p-1 text-slate-400 hover:text-red-600 transition-colors rounded">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
-      <p className="text-sm text-slate-200 leading-relaxed">{kaizen.description}</p>
-      <div className="flex items-center justify-between text-xs text-slate-500">
-        <span>{kaizen.author || "—"}</span>
+
+      <p className="text-sm font-bold text-slate-800 leading-snug flex-1">{kaizen.description}</p>
+
+      <div className="flex items-center justify-between pt-1 border-t border-slate-400/20">
+        <span className="text-xs text-slate-500">{kaizen.author || "—"}</span>
         {kaizen.estimated_gain > 0 && (
-          <span className="text-green-400/80">~{kaizen.estimated_gain.toLocaleString("fr-FR")} €</span>
+          <span className="text-xs font-semibold text-green-700">~{kaizen.estimated_gain.toLocaleString("fr-FR")} €</span>
         )}
       </div>
-      <div className="pt-1 border-t border-slate-700/50">
-        <button
-          onClick={onToPdca}
-          className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-        >
-          <RefreshCw className="w-3 h-3" />
-          Traiter en PDCA
-          <ChevronRight className="w-3 h-3" />
-        </button>
-      </div>
+
+      <button
+        onClick={onToPdca}
+        className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
+      >
+        <RefreshCw className="w-3 h-3" /> Traiter en PDCA
+      </button>
     </div>
   )
 }
