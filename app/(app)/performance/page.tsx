@@ -90,7 +90,7 @@ export default function PerformancePage() {
     ? `Aujourd'hui (${format(new Date(today), "dd/MM", { locale: fr })})`
     : period === "week"
     ? `Cette semaine (lun. ${format(new Date(start), "dd/MM", { locale: fr })} → aujourd'hui)`
-    : `Ce mois (${format(new Date(start), "1er MMMM", { locale: fr })} → aujourd'hui)`
+    : `Ce mois (${format(new Date(start), "'1er' MMMM", { locale: fr })} → aujourd'hui)`
 
   if (loading) return <div className="text-center py-20 text-slate-500">Chargement…</div>
 
