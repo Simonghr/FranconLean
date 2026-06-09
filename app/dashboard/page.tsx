@@ -24,7 +24,7 @@ import * as feedbackRepo from "@/lib/repositories/feedback"
 import * as kaizenRepo from "@/lib/repositories/kaizen"
 import { generateInsights } from "@/lib/services/insightsService"
 import { seedDatabase } from "@/lib/seed"
-import type { Incident, Sale, GxScore, CustomerFeedback, Insight, IncidentCategory, IncidentImpact } from "@/lib/types"
+import type { Incident, Sale, GxScore, CustomerFeedback, Insight, IncidentCategory, IncidentImpact, IncidentZone, IncidentType } from "@/lib/types"
 
 const SITE_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -41,8 +41,16 @@ export default function DashboardPage() {
 
   const [incidentOpen, setIncidentOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
-  const [incidentForm, setIncidentForm] = useState({
-    description: "", category: "process", impact: "medium", owner: ""
+
+  const nowParis = () => {
+    const now = new Date()
+    const date = now.toLocaleDateString("en-CA", { timeZone: "Europe/Paris" })
+    const time = now.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" })
+    return { date, time }
+  }
+  const [incidentForm, setIncidentForm] = useState(() => {
+    const { date, time } = nowParis()
+    return { description: "", incident_type: "technique", zone: "parc", date, time }
   })
   const [feedbackForm, setFeedbackForm] = useState({
     description: "", category: "compliment", sentiment: "positive"
@@ -132,18 +140,23 @@ const gxCalc = (fans: number, critics: number, total: number) =>
   })
 
   const handleAddIncident = async () => {
-    if (!incidentForm.description || !incidentForm.owner) return
+    if (!incidentForm.description) return
     try {
+      const occurred_at = new Date(`${incidentForm.date}T${incidentForm.time}:00`).toISOString()
       const newInc = await incidentsRepo.create({
         site_id: SITE_ID,
         description: incidentForm.description,
-        category: incidentForm.category as IncidentCategory,
-        impact: incidentForm.impact as IncidentImpact,
-        owner: incidentForm.owner,
+        category: 'other' as IncidentCategory,
+        impact: 'medium' as IncidentImpact,
+        owner: '',
         status: 'open',
+        zone: incidentForm.zone as IncidentZone,
+        incident_type: incidentForm.incident_type as IncidentType,
+        occurred_at,
       })
       setIncidents(prev => [newInc, ...prev])
-      setIncidentForm({ description: "", category: "process", impact: "medium", owner: "" })
+      const { date, time } = nowParis()
+      setIncidentForm({ description: "", incident_type: "technique", zone: "parc", date, time })
       setIncidentOpen(false)
     } catch (err) {
       console.error('Failed to create incident', err)
@@ -246,12 +259,12 @@ const gxCalc = (fans: number, critics: number, total: number) =>
           <h3 className="font-semibold text-white mb-4">Actions rapides</h3>
           <div className="space-y-3">
             <Button
-              className="w-full justify-start gap-3"
+              className="w-full justify-start gap-3 bg-orange-500/10 border-orange-500/40 text-orange-300 hover:bg-orange-500/20 hover:text-orange-200"
               variant="outline"
               onClick={() => setIncidentOpen(true)}
             >
               <AlertTriangle className="w-4 h-4 text-orange-400" />
-              Déclarer un incident
+              Signaler un incident
             </Button>
             <Button
               className="w-full justify-start gap-3"
@@ -284,7 +297,7 @@ const gxCalc = (fans: number, critics: number, total: number) =>
                       <Badge variant={inc.status === "open" ? "destructive" : "warning"} className="text-xs py-0">
                         {inc.status === "open" ? "Ouvert" : "En cours"}
                       </Badge>
-                      <span className="text-xs text-slate-500">{inc.owner}</span>
+                      {inc.zone && <span className="text-xs text-slate-500 capitalize">{inc.zone.replace("_", " ")}</span>}
                     </div>
                   </div>
                 </div>
@@ -298,58 +311,67 @@ const gxCalc = (fans: number, critics: number, total: number) =>
       <Dialog open={incidentOpen} onOpenChange={setIncidentOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Déclarer un incident</DialogTitle>
+            <DialogTitle>Signaler un incident</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Date</Label>
+                <Input
+                  type="date"
+                  value={incidentForm.date}
+                  onChange={e => setIncidentForm(f => ({ ...f, date: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Heure</Label>
+                <Input
+                  type="time"
+                  value={incidentForm.time}
+                  onChange={e => setIncidentForm(f => ({ ...f, time: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Zone</Label>
+              <Select value={incidentForm.zone} onValueChange={v => setIncidentForm(f => ({ ...f, zone: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bar">Bar</SelectItem>
+                  <SelectItem value="caisse">Caisse</SelectItem>
+                  <SelectItem value="arcades">Arcades</SelectItem>
+                  <SelectItem value="parc">Parc</SelectItem>
+                  <SelectItem value="laser_game">Laser Game</SelectItem>
+                  <SelectItem value="annivs">Annivs</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Type d'incident</Label>
+              <Select value={incidentForm.incident_type} onValueChange={v => setIncidentForm(f => ({ ...f, incident_type: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="technique">Technique</SelectItem>
+                  <SelectItem value="operationnel">Opérationnel</SelectItem>
+                  <SelectItem value="blessure">Blessure</SelectItem>
+                  <SelectItem value="service_client">Service client</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label>Description</Label>
               <Textarea
                 placeholder="Décrivez l'incident..."
                 value={incidentForm.description}
                 onChange={e => setIncidentForm(f => ({ ...f, description: e.target.value }))}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Catégorie</Label>
-                <Select value={incidentForm.category} onValueChange={v => setIncidentForm(f => ({ ...f, category: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="process">Process</SelectItem>
-                    <SelectItem value="quality">Qualité</SelectItem>
-                    <SelectItem value="security">Sécurité</SelectItem>
-                    <SelectItem value="client">Client</SelectItem>
-                    <SelectItem value="it">IT</SelectItem>
-                    <SelectItem value="logistics">Logistique</SelectItem>
-                    <SelectItem value="other">Autre</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Impact</Label>
-                <Select value={incidentForm.impact} onValueChange={v => setIncidentForm(f => ({ ...f, impact: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Faible</SelectItem>
-                    <SelectItem value="medium">Moyen</SelectItem>
-                    <SelectItem value="high">Élevé</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Responsable</Label>
-              <Input
-                placeholder="Nom du responsable"
-                value={incidentForm.owner}
-                onChange={e => setIncidentForm(f => ({ ...f, owner: e.target.value }))}
+                rows={3}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIncidentOpen(false)}>Annuler</Button>
-            <Button onClick={handleAddIncident} disabled={!incidentForm.description || !incidentForm.owner}>
-              Déclarer
+            <Button onClick={handleAddIncident} disabled={!incidentForm.description}>
+              Signaler
             </Button>
           </DialogFooter>
         </DialogContent>
