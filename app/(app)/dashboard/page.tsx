@@ -24,6 +24,7 @@ import * as feedbackRepo from "@/lib/repositories/feedback"
 import * as kaizenRepo from "@/lib/repositories/kaizen"
 import * as gxReviewsRepo from "@/lib/repositories/gxReviews"
 import type { GxReview } from "@/lib/repositories/gxReviews"
+import { translateTag } from "@/lib/gxTagTranslations"
 import { generateInsights } from "@/lib/services/insightsService"
 import { seedDatabase } from "@/lib/seed"
 import type { Incident, Sale, GxScore, CustomerFeedback, Insight, IncidentCategory, IncidentImpact, IncidentZone, IncidentType } from "@/lib/types"
@@ -288,7 +289,7 @@ const gxCalc = (fans: number, critics: number, total: number) =>
                 return (
                   <div key={tag}>
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="text-slate-200">{tag}</span>
+                      <span className="text-slate-200">{translateTag(tag)}</span>
                       <span className="text-slate-400">{count}</span>
                     </div>
                     <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
@@ -311,7 +312,7 @@ const gxCalc = (fans: number, critics: number, total: number) =>
                   return (
                     <div key={tag}>
                       <div className="flex justify-between text-xs mb-1">
-                        <span className="text-slate-200">{tag}</span>
+                        <span className="text-slate-200">{translateTag(tag)}</span>
                         <span className="text-slate-400">{count}</span>
                       </div>
                       <div className="h-1.5 bg-slate-700 rounded-full overflow-hidden">
