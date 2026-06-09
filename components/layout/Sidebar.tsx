@@ -2,7 +2,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
-  LayoutDashboard, TrendingUp, AlertTriangle, MessageSquare,
+  LayoutDashboard, TrendingUp, AlertTriangle, Star,
   Layers, MapPin, Settings, Activity, LogOut
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -11,7 +11,7 @@ const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Tableau de bord" },
   { href: "/performance", icon: TrendingUp, label: "Performance CA" },
   { href: "/incidents", icon: AlertTriangle, label: "Incidents" },
-  { href: "/feedback", icon: MessageSquare, label: "Retours Clients" },
+  { href: "/feedback", icon: Star, label: "GX Score" },
   { href: "/lean", icon: Layers, label: "Lean Tools" },
   { href: "/sites", icon: MapPin, label: "Sites" },
   { href: "/settings", icon: Settings, label: "Paramètres" },
