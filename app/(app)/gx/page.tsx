@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { Plus, Search, ThumbsUp, ThumbsDown, Minus, Star } from "lucide-react"
-import { format } from "date-fns"
+import { format, startOfWeek, startOfMonth } from "date-fns"
 import { fr } from "date-fns/locale"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -58,6 +58,7 @@ export default function GxScorePage() {
   const [search, setSearch] = useState("")
   const [filterSentiment, setFilterSentiment] = useState("all")
   const [filterReviews, setFilterReviews] = useState<"all" | "fan" | "critic">("all")
+  const [periodReviews, setPeriodReviews] = useState<"day" | "week" | "month">("month")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState({
     description: "", category: "compliment", sentiment: "positive",
@@ -122,11 +123,26 @@ export default function GxScorePage() {
     ? Math.round(last30Score.critics / last30Score.total * 100)
     : null
 
+  // ── Period filter for reviews ─────────────────────────────────────────────
+  const filteredReviews = (() => {
+    const today = new Date()
+    const todayStr = today.toISOString().split("T")[0]
+    if (periodReviews === "day") {
+      return reviews.filter(r => r.date === todayStr)
+    } else if (periodReviews === "week") {
+      const weekStart = startOfWeek(today, { weekStartsOn: 1 }).toISOString().split("T")[0]
+      return reviews.filter(r => r.date >= weekStart && r.date <= todayStr)
+    } else {
+      const monthStart = startOfMonth(today).toISOString().split("T")[0]
+      return reviews.filter(r => r.date >= monthStart && r.date <= todayStr)
+    }
+  })()
+
   // ── Tag synthesis ─────────────────────────────────────────────────────────
   const tagSynthesis = (() => {
     const fanTags: Record<string, number> = {}
     const criticTags: Record<string, number> = {}
-    for (const r of reviews) {
+    for (const r of filteredReviews) {
       const allReasons = [
         ...(r.service_rating_reasons ?? []),
         ...(r.safety_rating_reasons ?? []),
@@ -292,6 +308,23 @@ export default function GxScorePage() {
       {/* Roller reviews */}
       {reviews.length > 0 && (
         <div>
+          {/* Period filter */}
+          <div className="flex items-center gap-2 mb-3">
+            {([
+              { value: "day", label: "Journalier" },
+              { value: "week", label: "Hebdo" },
+              { value: "month", label: "Mensuel" },
+            ] as const).map(({ value, label }) => (
+              <button key={value} onClick={() => setPeriodReviews(value)}
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                  periodReviews === value
+                    ? "bg-amber-500/20 text-amber-400 border border-amber-500/40"
+                    : "bg-slate-800 text-slate-400 border border-slate-700 hover:text-white"
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold text-white flex items-center gap-2">
               <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
@@ -307,13 +340,13 @@ export default function GxScorePage() {
                         : "bg-slate-600 text-white border border-slate-500"
                       : "bg-slate-800 text-slate-400 border border-slate-700 hover:text-white"
                   }`}>
-                  {f === "all" ? `Tous (${reviews.length})` : f === "fan" ? `👍 Fans (${reviews.filter(r => r.is_fan).length})` : `👎 Critiques (${reviews.filter(r => r.is_critic).length})`}
+                  {f === "all" ? `Tous (${filteredReviews.length})` : f === "fan" ? `👍 Fans (${filteredReviews.filter(r => r.is_fan).length})` : `👎 Critiques (${filteredReviews.filter(r => r.is_critic).length})`}
                 </button>
               ))}
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {reviews.filter(r => filterReviews === "all" || (filterReviews === "fan" ? r.is_fan : r.is_critic)).map(r => {
+            {filteredReviews.filter(r => filterReviews === "all" || (filterReviews === "fan" ? r.is_fan : r.is_critic)).map(r => {
               const overallStars = r.overall_rating ?? (r.is_fan ? 5 : r.is_critic ? 2 : 3)
               const borderColor = r.is_fan ? "border-green-500/30 bg-green-500/5" : r.is_critic ? "border-red-500/30 bg-red-500/5" : "border-slate-700"
               const ratingRows: { label: string; val: number; reasons?: string[]; color: string }[] = [
