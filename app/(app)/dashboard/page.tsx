@@ -132,7 +132,7 @@ const gxCalc = (fans: number, critics: number, total: number) =>
     return total ? gxCalc(fans, critics, total) : null
   })()
 
-  const openIncidents = incidents.filter(i => i.status === "open" || i.status === "in_progress")
+  const openIncidents = incidents.filter(i => i.status !== 'closed' && i.status !== 'standardised')
   const weekFeedback = feedback.filter(f => {
     const d = new Date(f.created_at)
     const now = new Date()
@@ -149,7 +149,7 @@ const gxCalc = (fans: number, critics: number, total: number) =>
         category: 'other' as IncidentCategory,
         impact: 'medium' as IncidentImpact,
         owner: '',
-        status: 'open',
+        status: 'declared',
         zone: incidentForm.zone as IncidentZone,
         incident_type: incidentForm.incident_type as IncidentType,
         occurred_at,
@@ -294,8 +294,8 @@ const gxCalc = (fans: number, critics: number, total: number) =>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-slate-300 truncate">{inc.description}</p>
                     <div className="flex items-center gap-1.5 mt-0.5">
-                      <Badge variant={inc.status === "open" ? "destructive" : "warning"} className="text-xs py-0">
-                        {inc.status === "open" ? "Ouvert" : "En cours"}
+                      <Badge variant={inc.status === 'declared' ? 'destructive' : 'warning'} className="text-xs py-0">
+                        {inc.status === 'declared' ? 'Déclaré' : inc.status === 'analysed' ? 'Analysé' : 'En cours'}
                       </Badge>
                       {inc.zone && <span className="text-xs text-slate-500 capitalize">{inc.zone.replace("_", " ")}</span>}
                     </div>
