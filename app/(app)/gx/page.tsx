@@ -183,10 +183,6 @@ export default function GxScorePage() {
           </h1>
           <p className="text-slate-400 text-sm mt-1">Guest Experience · Données Roller</p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="w-4 h-4" />
-          Ajouter un commentaire
-        </Button>
       </div>
 
       {/* KPI cards */}
