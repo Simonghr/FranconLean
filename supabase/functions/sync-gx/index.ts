@@ -124,11 +124,27 @@ Deno.serve(async (req) => {
     const token = await getToken(clientId, clientSecret)
 
     if (debug) {
-      // DEBUG: fetch a single day and dump raw responses, no DB write.
       const items = await fetchDay(token, startDate)
       const sample = items[0] ?? null
       const fans = items.filter((r: any) => r?.isFan === true).length
       const critics = items.filter((r: any) => r?.isCritic === true).length
+
+      // Try fetching detail endpoint for first item
+      let detailResult: any = null
+      let customerResult: any = null
+      if (sample?.gxsResponseId) {
+        const detailRes = await fetch(`${ROLLER_BASE}/reporting/gxs/${sample.gxsResponseId}`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        })
+        detailResult = { status: detailRes.status, body: await detailRes.text().then(t => { try { return JSON.parse(t) } catch { return t } }) }
+      }
+      if (sample?.customerId) {
+        const custRes = await fetch(`${ROLLER_BASE}/customers/${sample.customerId}`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+        })
+        customerResult = { status: custRes.status, body: await custRes.text().then(t => { try { return JSON.parse(t) } catch { return t } }) }
+      }
+
       return new Response(
         JSON.stringify(
           {
@@ -141,7 +157,8 @@ Deno.serve(async (req) => {
             computedScoreForDay: items.length ? r2(((fans - critics) / items.length) * 100) : null,
             firstItemFields: sample ? Object.keys(sample) : [],
             firstItem: sample,
-            allItems: items.slice(0, 5),
+            detailEndpoint: detailResult,
+            customerEndpoint: customerResult,
           },
           null,
           2
