@@ -34,6 +34,7 @@ export default function DashboardPage() {
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [sales, setSales] = useState<Sale[]>([])
   const [gxScores, setGxScores] = useState<GxScore[]>([])
+  const [gxError, setGxError] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<CustomerFeedback[]>([])
   const [insights, setInsights] = useState<Insight[]>([])
   const [loading, setLoading] = useState(true)
@@ -51,22 +52,28 @@ export default function DashboardPage() {
     async function load() {
       try {
         await seedDatabase()
-        const [inc, sal, gx, fb, kz] = await Promise.all([
+        const [inc, sal, fb, kz] = await Promise.all([
           incidentsRepo.getAll(SITE_ID),
           salesRepo.getAll(SITE_ID),
-          gxRepo.getAll(SITE_ID),
           feedbackRepo.getAll(SITE_ID),
           kaizenRepo.getAll(SITE_ID),
         ])
         setIncidents(inc)
         setSales(sal)
-        setGxScores(gx)
         setFeedback(fb)
         setInsights(generateInsights(inc, sal, fb, kz, SITE_ID))
       } catch (err) {
         console.error('Failed to load dashboard data', err)
       } finally {
         setLoading(false)
+      }
+      // GX scores loaded separately so a failure here doesn't blank the whole dashboard
+      try {
+        const gx = await gxRepo.getAll(SITE_ID)
+        setGxScores(gx)
+      } catch (err) {
+        console.error('Failed to load GX scores', err)
+        setGxError(err instanceof Error ? err.message : String(err))
       }
     }
     load()
@@ -144,7 +151,7 @@ export default function DashboardPage() {
         <KPICard
           title="GX Score"
           value={loading ? "…" : gxScore !== null ? `${gxScore} pts` : "–"}
-          subtitle={todayGx ? `${todayGx.responses_count} avis · ${todayGx.date}` : "Aucune donnée"}
+          subtitle={gxError ? `Erreur: ${gxError.slice(0, 60)}` : todayGx ? `${todayGx.responses_count} avis · ${todayGx.date}` : "Aucune donnée"}
           trend={gxTrend}
           trendLabel="vs jour précédent"
           status={gxScore === null ? "warning" : gxScore >= 50 ? "good" : gxScore >= 0 ? "warning" : "critical"}
