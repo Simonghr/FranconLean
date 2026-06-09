@@ -141,6 +141,7 @@ Deno.serve(async (req) => {
             computedScoreForDay: items.length ? r2(((fans - critics) / items.length) * 100) : null,
             firstItemFields: sample ? Object.keys(sample) : [],
             firstItem: sample,
+            allItems: items.slice(0, 5),
           },
           null,
           2
@@ -152,6 +153,7 @@ Deno.serve(async (req) => {
     // Normal mode: paginate through the range day-by-day, aggregate fan/critic counts
     // per day (bucketed by createdDate), compute the NPS-style GX score, upsert to DB.
     const byDay = new Map<string, { fans: number; critics: number; total: number }>()
+    const reviewRows: any[] = []
     const errors: string[] = []
     let itemsReceived = 0
 
@@ -164,11 +166,32 @@ Deno.serve(async (req) => {
           const created = String(item?.createdDate ?? item?.modifiedDate ?? "")
           const day = created.split("T")[0]
           if (!day || day < startDate || day > lastDateStr) continue
+
+          // Aggregate by day
           const slot = byDay.get(day) ?? { fans: 0, critics: 0, total: 0 }
           slot.total += 1
           if (item?.isFan === true) slot.fans += 1
           else if (item?.isCritic === true) slot.critics += 1
           byDay.set(day, slot)
+
+          // Capture individual review if there's a comment
+          const comment = item?.comment ?? item?.comments ?? item?.reviewComment ?? item?.feedback ?? item?.guestComment ?? null
+          const guestName = [item?.firstName, item?.lastName].filter(Boolean).join(" ")
+            || item?.guestName || item?.name || item?.customerName || null
+          const rollerId = String(item?.id ?? item?.gxsId ?? item?.responseId ?? "")
+
+          if (rollerId) {
+            reviewRows.push({
+              site_id: SITE_ID,
+              date: day,
+              roller_id: rollerId,
+              guest_name: guestName || null,
+              overall_rating: item?.overallRating ?? item?.rating ?? null,
+              is_fan: item?.isFan === true,
+              is_critic: item?.isCritic === true,
+              comment: comment && String(comment).trim() ? String(comment).trim() : null,
+            })
+          }
         }
       } catch (e) {
         errors.push(String(e).slice(0, 200))
@@ -213,6 +236,16 @@ Deno.serve(async (req) => {
       synced = rows.length
     }
 
+    // Upsert individual reviews (only those with a roller_id)
+    let reviewsSynced = 0
+    if (reviewRows.length) {
+      const { error: revErr } = await supabase
+        .from("gx_reviews")
+        .upsert(reviewRows, { onConflict: "roller_id" })
+      if (revErr) errors.push(`gx_reviews upsert: ${revErr.message}`)
+      else reviewsSynced = reviewRows.length
+    }
+
     return new Response(
       JSON.stringify(
         {
@@ -220,6 +253,7 @@ Deno.serve(async (req) => {
           dateRange: { startDate, endDate: lastDateStr },
           itemsReceived,
           daysSynced: synced,
+          reviewsSynced,
           days: rows,
           errors: errors.length ? errors : undefined,
         },
