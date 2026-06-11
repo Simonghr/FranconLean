@@ -59,6 +59,7 @@ export default function GxScorePage() {
   const [filterSentiment, setFilterSentiment] = useState("all")
   const [filterReviews, setFilterReviews] = useState<"all" | "fan" | "critic">("all")
   const [periodReviews, setPeriodReviews] = useState<"day" | "week" | "month">("month")
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0])
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState({
     description: "", category: "compliment", sentiment: "positive",
@@ -93,7 +94,11 @@ export default function GxScorePage() {
   })()
 
   const periodScore = (() => {
-    if (periodReviews === "day") return last30Score
+    if (periodReviews === "day") {
+      const g = gxScores.find(g => g.date === selectedDate)
+      if (!g) return null
+      return { score: g.score, total: g.responses_count, fans: g.fans_count, critics: g.critics_count }
+    }
     if (!gxScores.length) return null
     const today = new Date()
     const todayStr = today.toISOString().split("T")[0]
@@ -108,7 +113,8 @@ export default function GxScorePage() {
     return total ? { score: gxCalc(fans, critics, total), total, fans, critics } : null
   })()
 
-  const periodScoreLabel = periodReviews === "day" ? "Score (30 dernières)"
+  const periodScoreLabel = periodReviews === "day"
+    ? `Score (${format(new Date(selectedDate), "dd/MM", { locale: fr })})`
     : periodReviews === "week" ? "Score (semaine)"
     : "Score (mois)"
 
@@ -148,7 +154,7 @@ export default function GxScorePage() {
     const today = new Date()
     const todayStr = today.toISOString().split("T")[0]
     if (periodReviews === "day") {
-      return reviews.filter(r => r.date === todayStr)
+      return reviews.filter(r => r.date === selectedDate)
     } else if (periodReviews === "week") {
       const weekStart = startOfWeek(today, { weekStartsOn: 1 }).toISOString().split("T")[0]
       return reviews.filter(r => r.date >= weekStart && r.date <= todayStr)
@@ -344,6 +350,14 @@ export default function GxScorePage() {
                 {label}
               </button>
             ))}
+            {periodReviews === "day" && (
+              <Input
+                type="date"
+                value={selectedDate}
+                onChange={e => setSelectedDate(e.target.value)}
+                className="w-auto h-7 text-xs px-2 py-1"
+              />
+            )}
           </div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold text-white flex items-center gap-2">
