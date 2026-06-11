@@ -69,7 +69,7 @@ export default function GxScorePage() {
     Promise.all([
       feedbackRepo.getAll(SITE_ID),
       gxRepo.getAll(SITE_ID),
-      gxReviewsRepo.getRecent(SITE_ID),
+      gxReviewsRepo.getRecent(SITE_ID, 500),
     ])
       .then(([fb, gx, rev]) => { setFeedbacks(fb); setGxScores(gx); setReviews(rev) })
       .catch(console.error)
