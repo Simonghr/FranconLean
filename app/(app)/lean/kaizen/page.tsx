@@ -31,7 +31,10 @@ function KaizenCard({ kaizen }: { kaizen: Kaizen }) {
           {format(new Date(kaizen.created_at), "dd/MM/yy", { locale: fr })}
         </span>
       </div>
-      <p className="text-sm text-slate-200 leading-relaxed mb-4">{kaizen.description}</p>
+      <p className="text-sm text-slate-200 leading-relaxed mb-2">{kaizen.description}</p>
+      {kaizen.benefits && (
+        <p className="text-xs text-blue-300/80 leading-relaxed mb-2">💡 {kaizen.benefits}</p>
+      )}
       <div className="flex items-center justify-between pt-3 border-t border-slate-700/50">
         <div className="flex items-center gap-1.5 text-xs text-slate-500">
           <div className="w-5 h-5 rounded-full bg-slate-600 flex items-center justify-center text-white text-xs">
@@ -44,11 +47,11 @@ function KaizenCard({ kaizen }: { kaizen: Kaizen }) {
             <div className="text-green-400 font-semibold text-sm">
               +{kaizen.real_gain.toLocaleString("fr-FR")} €
             </div>
-          ) : (
-            <div className="text-slate-400 text-xs">
-              ~{kaizen.estimated_gain.toLocaleString("fr-FR")} € estimés
+          ) : kaizen.estimated_cost ? (
+            <div className="text-orange-400 text-xs">
+              ~{kaizen.estimated_cost.toLocaleString("fr-FR")} € coût
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
@@ -59,7 +62,7 @@ export default function KaizenPage() {
   const [kaizenList, setKaizenList] = useState<Kaizen[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
-  const [form, setForm] = useState({ description: "", estimated_gain: "", author: "" })
+  const [form, setForm] = useState({ description: "", benefits: "", estimated_cost: "", author: "" })
 
   useEffect(() => {
     kaizenRepo.getAll(SITE_ID)
@@ -75,11 +78,13 @@ export default function KaizenPage() {
         site_id: SITE_ID,
         author: form.author,
         description: form.description,
-        estimated_gain: parseFloat(form.estimated_gain) || 0,
+        estimated_gain: 0,
+        benefits: form.benefits || undefined,
+        estimated_cost: parseFloat(form.estimated_cost) || 0,
         status: "idea",
       })
       setKaizenList(prev => [newK, ...prev])
-      setForm({ description: "", estimated_gain: "", author: "" })
+      setForm({ description: "", benefits: "", estimated_cost: "", author: "" })
       setDialogOpen(false)
     } catch (err) {
       console.error('Failed to create kaizen', err)
@@ -88,7 +93,7 @@ export default function KaizenPage() {
 
   const columns: KaizenStatus[] = ["idea", "in_progress", "implemented", "rejected"]
   const totalRealGain = kaizenList.filter(k => k.real_gain).reduce((s, k) => s + (k.real_gain ?? 0), 0)
-  const totalEstimated = kaizenList.filter(k => !k.real_gain).reduce((s, k) => s + k.estimated_gain, 0)
+  const totalEstimatedCost = kaizenList.filter(k => !k.real_gain).reduce((s, k) => s + (k.estimated_cost ?? 0), 0)
 
   return (
     <div className="space-y-6 max-w-[1400px]">
@@ -125,11 +130,11 @@ export default function KaizenPage() {
             <div className="text-xs text-slate-400">Gains réalisés</div>
           </div>
         </div>
-        <div className="bg-slate-800 border border-blue-500/20 rounded-xl p-4 flex items-center gap-3">
-          <Lightbulb className="w-8 h-8 text-blue-400" />
+        <div className="bg-slate-800 border border-orange-500/20 rounded-xl p-4 flex items-center gap-3">
+          <Lightbulb className="w-8 h-8 text-orange-400" />
           <div>
-            <div className="text-xl font-bold text-blue-400">~{totalEstimated.toLocaleString("fr-FR")} €</div>
-            <div className="text-xs text-slate-400">Gains potentiels</div>
+            <div className="text-xl font-bold text-orange-400">~{totalEstimatedCost.toLocaleString("fr-FR")} €</div>
+            <div className="text-xs text-slate-400">Coûts estimés (idées en cours)</div>
           </div>
         </div>
       </div>
@@ -175,24 +180,31 @@ export default function KaizenPage() {
                 rows={3}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Auteur *</Label>
-                <Input
-                  placeholder="Votre prénom"
-                  value={form.author}
-                  onChange={e => setForm(f => ({ ...f, author: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Gain estimé (€)</Label>
-                <Input
-                  type="number"
-                  placeholder="500"
-                  value={form.estimated_gain}
-                  onChange={e => setForm(f => ({ ...f, estimated_gain: e.target.value }))}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>Auteur *</Label>
+              <Input
+                placeholder="Votre prénom"
+                value={form.author}
+                onChange={e => setForm(f => ({ ...f, author: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Plus-values / bénéfices</Label>
+              <Textarea
+                placeholder="Gain de temps, hygiène, sécurité, amélioration expérience client..."
+                value={form.benefits}
+                onChange={e => setForm(f => ({ ...f, benefits: e.target.value }))}
+                rows={2}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Coût estimé (€)</Label>
+              <Input
+                type="number"
+                placeholder="500"
+                value={form.estimated_cost}
+                onChange={e => setForm(f => ({ ...f, estimated_cost: e.target.value }))}
+              />
             </div>
           </div>
           <DialogFooter>

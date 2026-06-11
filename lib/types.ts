@@ -82,6 +82,8 @@ export interface Kaizen {
   author: string
   description: string
   estimated_gain: number
+  benefits?: string
+  estimated_cost?: number
   real_gain?: number
   status: KaizenStatus
   created_at: string
