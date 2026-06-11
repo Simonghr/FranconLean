@@ -223,18 +223,13 @@ Deno.serve(async (req) => {
         for (const item of items) {
           const created = String(item?.createdDate ?? item?.modifiedDate ?? "")
           const day = created.split("T")[0]
-          if (!day || day < startDate || day > lastDateStr) continue
 
-          // Aggregate by day
-          const slot = byDay.get(day) ?? { fans: 0, critics: 0, total: 0 }
-          slot.total += 1
-          if (item?.isFan === true) slot.fans += 1
-          else if (item?.isCritic === true) slot.critics += 1
-          byDay.set(day, slot)
-
-          // Capture individual review
+          // Capture individual review regardless of whether `day` falls in the
+          // requested aggregate window — Roller filters this query by modifiedDate,
+          // so a response created outside [startDate,lastDateStr] can still surface
+          // here if it was modified (e.g. marked "Traité") within the window.
           const rollerId = String(item?.gxsResponseId ?? "")
-          if (rollerId) {
+          if (rollerId && day) {
             reviewRows.push({
               site_id: SITE_ID,
               date: day,
@@ -253,6 +248,15 @@ Deno.serve(async (req) => {
               is_critic: item?.isCritic === true,
               comment: item?.comments ?? null,
             })
+          }
+
+          // Aggregate by day, only within the requested window
+          if (day && day >= startDate && day <= lastDateStr) {
+            const slot = byDay.get(day) ?? { fans: 0, critics: 0, total: 0 }
+            slot.total += 1
+            if (item?.isFan === true) slot.fans += 1
+            else if (item?.isCritic === true) slot.critics += 1
+            byDay.set(day, slot)
           }
         }
       } catch (e) {
