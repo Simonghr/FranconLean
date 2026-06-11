@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { Plus, Search, ThumbsUp, ThumbsDown, Minus, Star } from "lucide-react"
-import { format, startOfWeek, startOfMonth } from "date-fns"
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from "date-fns"
 import { fr } from "date-fns/locale"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -60,6 +60,8 @@ export default function GxScorePage() {
   const [filterReviews, setFilterReviews] = useState<"all" | "fan" | "critic">("all")
   const [periodReviews, setPeriodReviews] = useState<"day" | "week" | "month">("month")
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split("T")[0])
+  const [selectedWeekDate, setSelectedWeekDate] = useState(() => new Date().toISOString().split("T")[0])
+  const [selectedMonth, setSelectedMonth] = useState(() => new Date().toISOString().slice(0, 7))
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState({
     description: "", category: "compliment", sentiment: "positive",
@@ -100,12 +102,17 @@ export default function GxScorePage() {
       return { score: g.score, total: g.responses_count, fans: g.fans_count, critics: g.critics_count }
     }
     if (!gxScores.length) return null
-    const today = new Date()
-    const todayStr = today.toISOString().split("T")[0]
-    const fromStr = periodReviews === "week"
-      ? startOfWeek(today, { weekStartsOn: 1 }).toISOString().split("T")[0]
-      : startOfMonth(today).toISOString().split("T")[0]
-    const days = gxScores.filter(g => g.date >= fromStr && g.date <= todayStr)
+    let fromStr: string, toStr: string
+    if (periodReviews === "week") {
+      const ref = new Date(selectedWeekDate)
+      fromStr = startOfWeek(ref, { weekStartsOn: 1 }).toISOString().split("T")[0]
+      toStr = endOfWeek(ref, { weekStartsOn: 1 }).toISOString().split("T")[0]
+    } else {
+      const ref = new Date(selectedMonth + "-01")
+      fromStr = startOfMonth(ref).toISOString().split("T")[0]
+      toStr = endOfMonth(ref).toISOString().split("T")[0]
+    }
+    const days = gxScores.filter(g => g.date >= fromStr && g.date <= toStr)
     if (!days.length) return null
     const fans = days.reduce((s, g) => s + (g.fans_count ?? 0), 0)
     const critics = days.reduce((s, g) => s + (g.critics_count ?? 0), 0)
@@ -115,8 +122,9 @@ export default function GxScorePage() {
 
   const periodScoreLabel = periodReviews === "day"
     ? `Score (${selectedDate ? format(new Date(selectedDate), "dd/MM", { locale: fr }) : "--/--"})`
-    : periodReviews === "week" ? "Score (semaine)"
-    : "Score (mois)"
+    : periodReviews === "week"
+    ? `Score (semaine du ${format(startOfWeek(new Date(selectedWeekDate), { weekStartsOn: 1 }), "dd/MM", { locale: fr })})`
+    : `Score (${format(new Date(selectedMonth + "-01"), "MMMM yyyy", { locale: fr })})`
 
   const lastWeekendScore = (() => {
     if (!gxScores.length) return null
@@ -151,16 +159,18 @@ export default function GxScorePage() {
 
   // ── Period filter for reviews ─────────────────────────────────────────────
   const filteredReviews = (() => {
-    const today = new Date()
-    const todayStr = today.toISOString().split("T")[0]
     if (periodReviews === "day") {
       return reviews.filter(r => r.date === selectedDate)
     } else if (periodReviews === "week") {
-      const weekStart = startOfWeek(today, { weekStartsOn: 1 }).toISOString().split("T")[0]
-      return reviews.filter(r => r.date >= weekStart && r.date <= todayStr)
+      const ref = new Date(selectedWeekDate)
+      const weekStart = startOfWeek(ref, { weekStartsOn: 1 }).toISOString().split("T")[0]
+      const weekEnd = endOfWeek(ref, { weekStartsOn: 1 }).toISOString().split("T")[0]
+      return reviews.filter(r => r.date >= weekStart && r.date <= weekEnd)
     } else {
-      const monthStart = startOfMonth(today).toISOString().split("T")[0]
-      return reviews.filter(r => r.date >= monthStart && r.date <= todayStr)
+      const ref = new Date(selectedMonth + "-01")
+      const monthStart = startOfMonth(ref).toISOString().split("T")[0]
+      const monthEnd = endOfMonth(ref).toISOString().split("T")[0]
+      return reviews.filter(r => r.date >= monthStart && r.date <= monthEnd)
     }
   })()
 
@@ -355,6 +365,22 @@ export default function GxScorePage() {
                 type="date"
                 value={selectedDate}
                 onChange={e => setSelectedDate(e.target.value)}
+                className="w-auto h-7 text-xs px-2 py-1"
+              />
+            )}
+            {periodReviews === "week" && (
+              <Input
+                type="date"
+                value={selectedWeekDate}
+                onChange={e => setSelectedWeekDate(e.target.value)}
+                className="w-auto h-7 text-xs px-2 py-1"
+              />
+            )}
+            {periodReviews === "month" && (
+              <Input
+                type="month"
+                value={selectedMonth}
+                onChange={e => setSelectedMonth(e.target.value)}
                 className="w-auto h-7 text-xs px-2 py-1"
               />
             )}
