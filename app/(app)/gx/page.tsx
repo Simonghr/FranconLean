@@ -114,7 +114,7 @@ export default function GxScorePage() {
   })()
 
   const periodScoreLabel = periodReviews === "day"
-    ? `Score (${format(new Date(selectedDate), "dd/MM", { locale: fr })})`
+    ? `Score (${selectedDate ? format(new Date(selectedDate), "dd/MM", { locale: fr }) : "--/--"})`
     : periodReviews === "week" ? "Score (semaine)"
     : "Score (mois)"
 
