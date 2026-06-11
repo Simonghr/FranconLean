@@ -39,6 +39,7 @@ export function BriefingHeader({ briefing, siteName }: BriefingHeaderProps) {
   const management = briefing.team.filter(m =>
     m.role === "Directeur" || m.role === "Adjointe" || m.role === "Resp. Zone"
   )
+  const experienceClient = briefing.team.filter(m => m.role.includes("Expérience Client"))
 
   const presentCount = briefing.team.filter(m => m.present).length
 
@@ -76,6 +77,15 @@ export function BriefingHeader({ briefing, siteName }: BriefingHeaderProps) {
                   present={m.present}
                   color={m.role === "Directeur" ? "bg-blue-600" : m.role === "Adjointe" ? "bg-indigo-500" : "bg-violet-500"}
                 />
+              ))}
+            </div>
+
+            <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-4 mb-3 pt-4 border-t border-slate-700/50">
+              Expérience Client
+            </div>
+            <div className="flex items-start gap-4 flex-wrap">
+              {experienceClient.map(m => (
+                <Avatar key={m.name} name={m.name} role={m.role} present={m.present} color="bg-cyan-600" />
               ))}
             </div>
           </div>

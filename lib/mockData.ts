@@ -23,6 +23,7 @@ export const mockBriefing: DailyBriefing = {
     { name: 'Simon', role: 'Directeur', present: true },
     { name: 'Clémentine', role: 'Adjointe', present: true },
     { name: 'Celia', role: 'Resp. Zone', present: true },
+    { name: 'Jérémie', role: 'Animateur Expérience Client', present: true },
     { name: 'Sokaina', role: 'Trampoline Réf.', present: true },
     { name: 'Iliane', role: 'Trampoline', present: true },
     { name: 'Sophie', role: 'Trampoline', present: true },
