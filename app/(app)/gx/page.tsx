@@ -92,6 +92,26 @@ export default function GxScorePage() {
     return total ? { score: gxCalc(fans, critics, total), total, fans, critics } : null
   })()
 
+  const periodScore = (() => {
+    if (periodReviews === "day") return last30Score
+    if (!gxScores.length) return null
+    const today = new Date()
+    const todayStr = today.toISOString().split("T")[0]
+    const fromStr = periodReviews === "week"
+      ? startOfWeek(today, { weekStartsOn: 1 }).toISOString().split("T")[0]
+      : startOfMonth(today).toISOString().split("T")[0]
+    const days = gxScores.filter(g => g.date >= fromStr && g.date <= todayStr)
+    if (!days.length) return null
+    const fans = days.reduce((s, g) => s + (g.fans_count ?? 0), 0)
+    const critics = days.reduce((s, g) => s + (g.critics_count ?? 0), 0)
+    const total = days.reduce((s, g) => s + g.responses_count, 0)
+    return total ? { score: gxCalc(fans, critics, total), total, fans, critics } : null
+  })()
+
+  const periodScoreLabel = periodReviews === "day" ? "Score (30 dernières)"
+    : periodReviews === "week" ? "Score (semaine)"
+    : "Score (mois)"
+
   const lastWeekendScore = (() => {
     if (!gxScores.length) return null
     const today = new Date()
@@ -205,10 +225,10 @@ export default function GxScorePage() {
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {[
           {
-            label: "Score (30 dernières)",
-            value: last30Score ? `${last30Score.score} pts` : "–",
-            sub: last30Score ? `${last30Score.total} réponses` : "Pas de données",
-            color: scoreColor(last30Score?.score ?? null),
+            label: periodScoreLabel,
+            value: periodScore ? `${periodScore.score} pts` : "–",
+            sub: periodScore ? `${periodScore.total} réponses` : "Pas de données",
+            color: scoreColor(periodScore?.score ?? null),
           },
           {
             label: "Score Week-end",
