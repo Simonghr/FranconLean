@@ -104,10 +104,12 @@ export default function GxScorePage() {
     if (!gxScores.length) return null
     let fromStr: string, toStr: string
     if (periodReviews === "week") {
+      if (!selectedWeekDate) return null
       const ref = new Date(selectedWeekDate)
       fromStr = startOfWeek(ref, { weekStartsOn: 1 }).toISOString().split("T")[0]
       toStr = endOfWeek(ref, { weekStartsOn: 1 }).toISOString().split("T")[0]
     } else {
+      if (!selectedMonth) return null
       const ref = new Date(selectedMonth + "-01")
       fromStr = startOfMonth(ref).toISOString().split("T")[0]
       toStr = endOfMonth(ref).toISOString().split("T")[0]
@@ -123,8 +125,8 @@ export default function GxScorePage() {
   const periodScoreLabel = periodReviews === "day"
     ? `Score (${selectedDate ? format(new Date(selectedDate), "dd/MM", { locale: fr }) : "--/--"})`
     : periodReviews === "week"
-    ? `Score (semaine du ${format(startOfWeek(new Date(selectedWeekDate), { weekStartsOn: 1 }), "dd/MM", { locale: fr })})`
-    : `Score (${format(new Date(selectedMonth + "-01"), "MMMM yyyy", { locale: fr })})`
+    ? `Score (semaine du ${selectedWeekDate ? format(startOfWeek(new Date(selectedWeekDate), { weekStartsOn: 1 }), "dd/MM", { locale: fr }) : "--/--"})`
+    : `Score (${selectedMonth ? format(new Date(selectedMonth + "-01"), "MMMM yyyy", { locale: fr }) : "--"})`
 
   const lastWeekendScore = (() => {
     if (!gxScores.length) return null
@@ -162,11 +164,13 @@ export default function GxScorePage() {
     if (periodReviews === "day") {
       return reviews.filter(r => r.date === selectedDate)
     } else if (periodReviews === "week") {
+      if (!selectedWeekDate) return []
       const ref = new Date(selectedWeekDate)
       const weekStart = startOfWeek(ref, { weekStartsOn: 1 }).toISOString().split("T")[0]
       const weekEnd = endOfWeek(ref, { weekStartsOn: 1 }).toISOString().split("T")[0]
       return reviews.filter(r => r.date >= weekStart && r.date <= weekEnd)
     } else {
+      if (!selectedMonth) return []
       const ref = new Date(selectedMonth + "-01")
       const monthStart = startOfMonth(ref).toISOString().split("T")[0]
       const monthEnd = endOfMonth(ref).toISOString().split("T")[0]
