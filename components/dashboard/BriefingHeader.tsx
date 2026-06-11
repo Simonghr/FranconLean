@@ -33,8 +33,9 @@ export function BriefingHeader({ briefing, siteName }: BriefingHeaderProps) {
   const dateFormatted = dateStr.charAt(0).toUpperCase() + dateStr.slice(1)
 
   const caisse = briefing.team.filter(m => m.role.includes("Caisse"))
-  const food = briefing.team.filter(m => m.role.includes("Food"))
   const trampoline = briefing.team.filter(m => m.role.includes("Trampoline"))
+  const anniversaire = briefing.team.filter(m => m.role.includes("Anniversaire"))
+  const restauration = briefing.team.filter(m => m.role.includes("Restauration"))
   const management = briefing.team.filter(m =>
     m.role === "Directeur" || m.role === "Adjointe" || m.role === "Resp. Zone"
   )
@@ -102,9 +103,17 @@ export function BriefingHeader({ briefing, siteName }: BriefingHeaderProps) {
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-slate-500 w-20 flex-shrink-0">Food</span>
+                <span className="text-xs text-slate-500 w-20 flex-shrink-0">Anniversaire</span>
                 <div className="flex gap-2">
-                  {food.map(m => (
+                  {anniversaire.map(m => (
+                    <Avatar key={m.name} name={m.name} role={m.role} present={m.present} color="bg-pink-600" />
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs text-slate-500 w-20 flex-shrink-0">Restauration</span>
+                <div className="flex gap-2">
+                  {restauration.map(m => (
                     <Avatar key={m.name} name={m.name} role={m.role} present={m.present} color="bg-yellow-600" />
                   ))}
                 </div>
