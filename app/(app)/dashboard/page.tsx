@@ -294,7 +294,7 @@ const gxCalc = (fans: number, critics: number, total: number) =>
         </div>
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-white">Incidents par catégorie</h3>
+            <h3 className="font-semibold text-white">Incidents par type</h3>
             <div className="flex items-center gap-3">
               <span className={`text-2xl font-bold ${openIncidents.length === 0 ? "text-green-400" : openIncidents.length <= 2 ? "text-orange-400" : "text-red-400"}`}>
                 {openIncidents.length}

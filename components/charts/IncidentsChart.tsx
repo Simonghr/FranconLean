@@ -8,22 +8,18 @@ interface IncidentsChartProps {
 }
 
 const categoryLabels: Record<string, string> = {
-  process: "Process",
-  quality: "Qualité",
-  security: "Sécu.",
-  client: "Client",
-  it: "IT",
-  logistics: "Logist.",
+  technique: "Technique",
+  operationnel: "Opérationnel",
+  blessure: "Blessure",
+  service_client: "Service client",
   other: "Autre",
 }
 
 const categoryColors: Record<string, string> = {
-  process: "#3b82f6",
-  quality: "#f97316",
-  security: "#ef4444",
-  client: "#8b5cf6",
-  it: "#06b6d4",
-  logistics: "#eab308",
+  technique: "#06b6d4",
+  operationnel: "#3b82f6",
+  blessure: "#ef4444",
+  service_client: "#8b5cf6",
   other: "#64748b",
 }
 
@@ -39,10 +35,11 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null
 }
 
-export function IncidentsChart({ incidents, title = "Incidents par catégorie" }: IncidentsChartProps) {
+export function IncidentsChart({ incidents, title = "Incidents par type" }: IncidentsChartProps) {
   const counts: Record<string, number> = {}
   incidents.forEach(inc => {
-    counts[inc.category] = (counts[inc.category] ?? 0) + 1
+    const key = inc.incident_type ?? "other"
+    counts[key] = (counts[key] ?? 0) + 1
   })
 
   const data = Object.entries(counts).map(([cat, count]) => ({
