@@ -60,8 +60,8 @@ const kaizenStickyColor: Record<KaizenStatus, { bg: string; border: string; dot:
   rejected:    { bg: "bg-[#f1f5f9]", border: "border-slate-200",   dot: "bg-slate-400",   label: "Rejetée" },
 }
 
-type KaizenFormState = { description: string; estimated_gain: string; status: KaizenStatus; author: string }
-const blankKaizen = (): KaizenFormState => ({ description: "", estimated_gain: "0", status: "idea", author: "" })
+type KaizenFormState = { description: string; benefits: string; estimated_cost: string; status: KaizenStatus; author: string }
+const blankKaizen = (): KaizenFormState => ({ description: "", benefits: "", estimated_cost: "0", status: "idea", author: "" })
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -153,14 +153,14 @@ function LeanPageInner() {
 
   const openEditKaizen = (k: Kaizen) => {
     setEditingKaizen(k)
-    setKaizenForm({ description: k.description, estimated_gain: String(k.estimated_gain), status: k.status, author: k.author })
+    setKaizenForm({ description: k.description, benefits: k.benefits ?? "", estimated_cost: String(k.estimated_cost ?? 0), status: k.status, author: k.author })
     setKaizenOpen(true)
   }
 
   const saveKaizen = async () => {
     setSavingKaizen(true)
     try {
-      const payload = { site_id: SITE_ID, description: kaizenForm.description, estimated_gain: Number(kaizenForm.estimated_gain) || 0, status: kaizenForm.status, author: kaizenForm.author }
+      const payload = { site_id: SITE_ID, description: kaizenForm.description, estimated_gain: 0, benefits: kaizenForm.benefits || undefined, estimated_cost: Number(kaizenForm.estimated_cost) || 0, status: kaizenForm.status, author: kaizenForm.author }
       editingKaizen ? await kaizenRepo.update(editingKaizen.id, payload) : await kaizenRepo.create(payload)
       setKaizenOpen(false); await load()
     } catch (err) { console.error(err) }
@@ -393,8 +393,12 @@ function LeanPageInner() {
               <input className="w-full rounded-md bg-slate-800 border border-slate-700 text-white px-3 py-2 text-sm" placeholder="Nom" value={kaizenForm.author} onChange={e => setKaizenForm(f => ({ ...f, author: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-slate-300 font-semibold">Gain estimé (€)</Label>
-              <input type="number" className="w-full rounded-md bg-slate-800 border border-slate-700 text-white px-3 py-2 text-sm" placeholder="0" value={kaizenForm.estimated_gain} onChange={e => setKaizenForm(f => ({ ...f, estimated_gain: e.target.value }))} />
+              <Label className="text-slate-300 font-semibold">Plus-values / bénéfices</Label>
+              <Textarea className="bg-slate-800 border-slate-700 text-white resize-none" rows={2} placeholder="Gain de temps, hygiène, sécurité, amélioration expérience client..." value={kaizenForm.benefits} onChange={e => setKaizenForm(f => ({ ...f, benefits: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-slate-300 font-semibold">Coût estimé (€)</Label>
+              <input type="number" className="w-full rounded-md bg-slate-800 border border-slate-700 text-white px-3 py-2 text-sm" placeholder="0" value={kaizenForm.estimated_cost} onChange={e => setKaizenForm(f => ({ ...f, estimated_cost: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
               <Label className="text-slate-300 font-semibold">Statut</Label>
@@ -527,11 +531,14 @@ function StickyKaizen({ kaizen, onEdit, onDelete, onToPdca, deleting }: {
       </div>
 
       <p className="text-sm font-bold text-slate-800 leading-snug flex-1">{kaizen.description}</p>
+      {kaizen.benefits && (
+        <p className="text-xs text-slate-700 leading-snug">💡 {kaizen.benefits}</p>
+      )}
 
       <div className="flex items-center justify-between pt-1 border-t border-slate-400/20">
         <span className="text-xs text-slate-500">{kaizen.author || "—"}</span>
-        {kaizen.estimated_gain > 0 && (
-          <span className="text-xs font-semibold text-green-700">~{kaizen.estimated_gain.toLocaleString("fr-FR")} €</span>
+        {(kaizen.estimated_cost ?? 0) > 0 && (
+          <span className="text-xs font-semibold text-orange-700">~{(kaizen.estimated_cost ?? 0).toLocaleString("fr-FR")} €</span>
         )}
       </div>
 
