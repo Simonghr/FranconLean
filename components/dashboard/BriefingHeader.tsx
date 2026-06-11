@@ -13,17 +13,14 @@ function Avatar({ name, role, present, color = "bg-blue-600" }: {
   name: string; role: string; present: boolean; color?: string
 }) {
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div className="flex flex-col items-center gap-1" title={role}>
       <div className="relative">
-        <div className={`w-10 h-10 rounded-full ${present ? color : "bg-slate-600"} flex items-center justify-center text-white text-sm font-semibold`}>
+        <div className={`w-7 h-7 rounded-full ${present ? color : "bg-slate-600"} flex items-center justify-center text-white text-xs font-semibold`}>
           {name.charAt(0)}
         </div>
-        <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-slate-800 ${present ? "bg-green-400" : "bg-slate-500"}`} />
+        <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-slate-800 ${present ? "bg-green-400" : "bg-slate-500"}`} />
       </div>
-      <div className="text-center">
-        <div className="text-xs font-medium text-white leading-none">{name}</div>
-        <div className="text-xs text-slate-400 leading-none mt-0.5">{role}</div>
-      </div>
+      <div className="text-[10px] font-medium text-white leading-none max-w-[3.5rem] truncate">{name}</div>
     </div>
   )
 }
@@ -61,14 +58,14 @@ export function BriefingHeader({ briefing, siteName }: BriefingHeaderProps) {
         </div>
       </div>
 
-      <div className="p-5">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="p-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.6fr_1fr] gap-4">
           {/* Management */}
           <div>
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">
+            <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">
               Management
             </div>
-            <div className="flex items-start gap-4 flex-wrap">
+            <div className="flex items-start gap-2 flex-wrap">
               {management.map(m => (
                 <Avatar
                   key={m.name}
@@ -80,10 +77,10 @@ export function BriefingHeader({ briefing, siteName }: BriefingHeaderProps) {
               ))}
             </div>
 
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-4 mb-3 pt-4 border-t border-slate-700/50">
+            <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest mt-2 mb-2 pt-2 border-t border-slate-700/50">
               Expérience Client
             </div>
-            <div className="flex items-start gap-4 flex-wrap">
+            <div className="flex items-start gap-2 flex-wrap">
               {experienceClient.map(m => (
                 <Avatar key={m.name} name={m.name} role={m.role} present={m.present} color="bg-cyan-600" />
               ))}
@@ -92,37 +89,37 @@ export function BriefingHeader({ briefing, siteName }: BriefingHeaderProps) {
 
           {/* Equipes */}
           <div>
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-3">
+            <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">
               Équipes opérationnelles
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-slate-500 w-20 flex-shrink-0">Trampoline</span>
-                <div className="flex gap-2">
+                <span className="text-xs text-slate-500 w-16 flex-shrink-0">Trampoline</span>
+                <div className="flex gap-1.5 flex-wrap">
                   {trampoline.map(m => (
                     <Avatar key={m.name} name={m.name} role={m.role} present={m.present} color="bg-teal-600" />
                   ))}
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-slate-500 w-20 flex-shrink-0">Caisse</span>
-                <div className="flex gap-2">
+                <span className="text-xs text-slate-500 w-16 flex-shrink-0">Caisse</span>
+                <div className="flex gap-1.5 flex-wrap">
                   {caisse.map(m => (
                     <Avatar key={m.name} name={m.name} role={m.role} present={m.present} color="bg-orange-600" />
                   ))}
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-slate-500 w-20 flex-shrink-0">Anniversaire</span>
-                <div className="flex gap-2">
+                <span className="text-xs text-slate-500 w-16 flex-shrink-0">Anniv.</span>
+                <div className="flex gap-1.5 flex-wrap">
                   {anniversaire.map(m => (
                     <Avatar key={m.name} name={m.name} role={m.role} present={m.present} color="bg-pink-600" />
                   ))}
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-slate-500 w-20 flex-shrink-0">Restauration</span>
-                <div className="flex gap-2">
+                <span className="text-xs text-slate-500 w-16 flex-shrink-0">Restauration</span>
+                <div className="flex gap-1.5 flex-wrap">
                   {restauration.map(m => (
                     <Avatar key={m.name} name={m.name} role={m.role} present={m.present} color="bg-yellow-600" />
                   ))}
@@ -133,16 +130,16 @@ export function BriefingHeader({ briefing, siteName }: BriefingHeaderProps) {
 
           {/* Objectifs du jour */}
           <div>
-            <div className="flex items-center gap-2 mb-3">
+            <div className="flex items-center gap-2 mb-2">
               <Calendar className="w-3.5 h-3.5 text-slate-400" />
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">
                 Objectifs du jour
               </span>
             </div>
-            <ul className="space-y-2">
+            <ul className="space-y-1.5">
               {briefing.objectives.map((obj, i) => (
-                <li key={i} className="flex items-start gap-2 text-sm">
-                  <CheckCircle2 className="w-4 h-4 text-slate-600 flex-shrink-0 mt-0.5" />
+                <li key={i} className="flex items-start gap-2 text-xs">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-slate-600 flex-shrink-0 mt-0.5" />
                   <span className="text-slate-300">{obj}</span>
                 </li>
               ))}
