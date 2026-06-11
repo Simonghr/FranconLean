@@ -432,20 +432,28 @@ Deno.serve(async (req) => {
       )
     }
 
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+    )
+
+    const { data: budgetRows } = await supabase
+      .from("budgets")
+      .select("date, target")
+      .eq("site_id", SITE_ID)
+      .gte("date", startDate)
+      .lte("date", lastDateStr)
+    const budgetByDate = new Map((budgetRows ?? []).map((b: any) => [b.date, Number(b.target)]))
+
     const rows = [...byDay.entries()]
       .map(([date, amount]) => ({
         site_id: SITE_ID,
         date,
         amount: r2(amount),
-        target: DAILY_TARGET,
+        target: budgetByDate.get(date) ?? DAILY_TARGET,
         period: "day",
       }))
       .sort((a, b) => a.date.localeCompare(b.date))
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    )
 
     let synced = 0
     if (rows.length) {
