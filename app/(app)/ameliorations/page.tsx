@@ -1,6 +1,8 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Plus, Trash2, RefreshCw, ListChecks, MessageSquare } from "lucide-react"
+import { Plus, Trash2, RefreshCw, ListChecks, MessageSquare, Calendar } from "lucide-react"
+import { format } from "date-fns"
+import { fr } from "date-fns/locale"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -17,6 +19,13 @@ const zoneLabels: Record<ImprovementZone, string> = {
   anniv: "Anniv",
   bar: "Bar",
   caisse: "Caisse",
+}
+
+const zoneStyles: Record<ImprovementZone, { tab: string; bar: string; badge: string }> = {
+  parc:   { tab: "data-[state=active]:bg-green-600",  bar: "border-l-green-500",  badge: "bg-green-500/10 text-green-400 border-green-500/20" },
+  anniv:  { tab: "data-[state=active]:bg-pink-600",   bar: "border-l-pink-500",   badge: "bg-pink-500/10 text-pink-400 border-pink-500/20" },
+  bar:    { tab: "data-[state=active]:bg-orange-600", bar: "border-l-orange-500", badge: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
+  caisse: { tab: "data-[state=active]:bg-blue-600",   bar: "border-l-blue-500",   badge: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
 }
 
 export default function AmeliorationsPage() {
@@ -91,12 +100,15 @@ export default function AmeliorationsPage() {
       <Tabs value={zone} onValueChange={v => setZone(v as ImprovementZone)}>
         <TabsList>
           {ZONES.map(z => (
-            <TabsTrigger key={z} value={z}>{zoneLabels[z]}</TabsTrigger>
+            <TabsTrigger key={z} value={z} className={zoneStyles[z].tab}>{zoneLabels[z]}</TabsTrigger>
           ))}
         </TabsList>
       </Tabs>
 
-      <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+      <div className={`bg-slate-800 border border-slate-700 border-t-4 ${zoneStyles[zone].bar.replace("border-l-", "border-t-")} rounded-xl p-5`}>
+        <div className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border mb-4 ${zoneStyles[zone].badge}`}>
+          Zone : {zoneLabels[zone]}
+        </div>
         <div className="flex items-center gap-2 mb-4">
           <Input
             value={newItem}
@@ -118,7 +130,7 @@ export default function AmeliorationsPage() {
         ) : (
           <ul className="space-y-2">
             {zoneItems.map(item => (
-              <li key={item.id} className="bg-slate-900/50 border border-slate-700 rounded-lg p-3">
+              <li key={item.id} className={`bg-slate-900/50 border border-slate-700 border-l-4 ${zoneStyles[item.zone].bar} rounded-lg p-3`}>
                 <div className="flex items-start gap-3">
                   <button
                     onClick={() => toggleDone(item)}
@@ -132,6 +144,10 @@ export default function AmeliorationsPage() {
                   <div className="flex-1 min-w-0">
                     <div className={`text-sm ${item.done ? "text-slate-500 line-through" : "text-white"}`}>
                       {item.description}
+                    </div>
+                    <div className="flex items-center gap-1 text-[11px] text-slate-500 mt-1">
+                      <Calendar className="w-3 h-3" />
+                      {format(new Date(item.created_at), "dd MMM yyyy", { locale: fr })}
                     </div>
 
                     {openComment === item.id ? (
