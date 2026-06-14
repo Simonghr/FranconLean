@@ -176,7 +176,7 @@ export default function AmeliorationsPage() {
                         </button>
 
                         <div className="flex-1 min-w-0">
-                          <div className={`text-sm ${item.done ? "text-slate-500 line-through" : "text-white"}`}>
+                          <div className="text-sm text-white">
                             {item.description}
                           </div>
                           <div className="flex items-center gap-1 text-[11px] text-slate-500 mt-1">
