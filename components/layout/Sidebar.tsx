@@ -7,6 +7,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/context/AuthContext"
+import { isPathAllowed } from "@/lib/access"
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Tableau de bord" },
@@ -23,7 +24,7 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, signOut } = useAuth()
+  const { user, role, signOut } = useAuth()
 
   const handleSignOut = async () => {
     await signOut()
@@ -50,7 +51,7 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ href, icon: Icon, label }) => {
+        {navItems.filter(item => isPathAllowed(role, item.href)).map(({ href, icon: Icon, label }) => {
           const isActive = pathname === href || (href !== "/dashboard" && pathname.startsWith(href))
           return (
             <Link
