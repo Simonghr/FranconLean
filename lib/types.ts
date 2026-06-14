@@ -42,6 +42,18 @@ export type IncidentImpact = 'low' | 'medium' | 'high'
 export type IncidentUrgency = 'low' | 'medium' | 'client_impact'
 export type IncidentStatus = 'declared' | 'analysed' | 'action_ongoing' | 'verified' | 'standardised' | 'closed'
 export type IncidentZone = 'bar' | 'caisse' | 'arcades' | 'parc' | 'laser_game' | 'annivs'
+
+export type ImprovementZone = 'parc' | 'anniv' | 'bar' | 'caisse'
+
+export interface Improvement {
+  id: string
+  site_id: string
+  zone: ImprovementZone
+  description: string
+  comment: string
+  done: boolean
+  created_at: string
+}
 export type IncidentType = 'technique' | 'operationnel' | 'blessure' | 'service_client'
 
 export interface Incident {

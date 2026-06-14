@@ -3,13 +3,14 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard, TrendingUp, AlertTriangle, Star,
-  Layers, MapPin, Settings, Activity, LogOut, Brain
+  Layers, MapPin, Settings, Activity, LogOut, Brain, ListChecks
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/context/AuthContext"
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Tableau de bord" },
+  { href: "/ameliorations", icon: ListChecks, label: "Amélioration" },
   { href: "/performance", icon: TrendingUp, label: "Performance CA" },
   { href: "/incidents", icon: AlertTriangle, label: "Incidents" },
   { href: "/gx", icon: Star, label: "GX Score" },

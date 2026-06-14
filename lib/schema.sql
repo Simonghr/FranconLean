@@ -204,3 +204,17 @@ CREATE POLICY "A3 writable by site members" ON a3_reports FOR INSERT TO authenti
 CREATE POLICY "Insights readable by site members" ON insights FOR SELECT TO authenticated USING (
   EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND site_id = insights.site_id)
 );
+
+-- Improvements (to-do per zone for upcoming weekend)
+CREATE TABLE improvements (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  zone TEXT NOT NULL CHECK (zone IN ('parc', 'anniv', 'bar', 'caisse')),
+  description TEXT NOT NULL,
+  comment TEXT NOT NULL DEFAULT '',
+  done BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE improvements ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "public_all" ON improvements FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
