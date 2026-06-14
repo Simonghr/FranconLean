@@ -43,6 +43,21 @@ export type IncidentUrgency = 'low' | 'medium' | 'client_impact'
 export type IncidentStatus = 'declared' | 'analysed' | 'action_ongoing' | 'verified' | 'standardised' | 'closed'
 export type IncidentZone = 'bar' | 'caisse' | 'arcades' | 'parc' | 'laser_game' | 'annivs'
 
+export type BrainstormCategory =
+  | 'accueil' | 'salles' | 'extensions'
+  | 'ambiance' | 'communication' | 'comprehension' | 'entraide'
+  | 'satisfaction' | 'accompagnement' | 'feedback'
+export type BrainstormSentiment = 'positive' | 'negative'
+
+export interface BrainstormEntry {
+  id: string
+  site_id: string
+  category: BrainstormCategory
+  sentiment: BrainstormSentiment
+  keyword: string
+  created_at: string
+}
+
 export type ImprovementZone = 'parc' | 'anniv' | 'bar' | 'caisse'
 export type ImprovementKind = 'positive' | 'improvement'
 

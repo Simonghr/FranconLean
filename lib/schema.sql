@@ -223,3 +223,16 @@ ALTER TABLE improvements ADD COLUMN kind TEXT NOT NULL DEFAULT 'improvement' CHE
 
 -- Link GX reviews to their Roller booking, to surface reviews tied to Anniversaire bookings
 ALTER TABLE gx_reviews ADD COLUMN booking_reference TEXT;
+
+-- Brainstorm (team meeting): quick keywords per category, positive/negative
+CREATE TABLE brainstorm_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  site_id UUID NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+  category TEXT NOT NULL CHECK (category IN ('accueil', 'salles', 'extensions', 'ambiance', 'communication', 'comprehension', 'entraide', 'satisfaction', 'accompagnement', 'feedback')),
+  sentiment TEXT NOT NULL CHECK (sentiment IN ('positive', 'negative')),
+  keyword TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE brainstorm_entries ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "public_all" ON brainstorm_entries FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
