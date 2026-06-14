@@ -58,25 +58,63 @@ export default function AmeliorationsPage() {
   const [loading, setLoading] = useState(true)
   const [newItems, setNewItems] = useState<Record<ImprovementKind, string>>({ positive: "", improvement: "" })
   const [qrExpanded, setQrExpanded] = useState(false)
+  const [brainstormOpen, setBrainstormOpen] = useState(true)
+  const [editingEntry, setEditingEntry] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState("")
+  const [newKeyword, setNewKeyword] = useState<Record<string, string>>({})
   const [openComment, setOpenComment] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState("")
 
   const load = async () => {
     setLoading(true)
     try {
-      const [data, reviews, bookings, brainstorm] = await Promise.all([
+      const [data, reviews, bookings, brainstorm, settings] = await Promise.all([
         improvementsRepo.getAll(SITE_ID),
         gxReviewsRepo.getRecent(SITE_ID, 500),
         bookingsRepo.getAnniversaryBookings(SITE_ID),
         brainstormRepo.getAll(SITE_ID),
+        brainstormRepo.getSettings(SITE_ID),
       ])
       setItems(data.map(i => ({ ...i, kind: i.kind ?? 'improvement' })))
       const refs = new Set(bookings.map(b => b.roller_booking_id))
       setAnniversaryReviews(reviews.filter(r => r.booking_reference && refs.has(r.booking_reference)))
       setBrainstormEntries(brainstorm)
+      setBrainstormOpen(settings.is_open)
     } finally {
       setLoading(false)
     }
+  }
+
+  const toggleBrainstormOpen = async () => {
+    const updated = await brainstormRepo.setOpen(SITE_ID, !brainstormOpen)
+    setBrainstormOpen(updated.is_open)
+  }
+
+  const startEditEntry = (entry: BrainstormEntry) => {
+    setEditingEntry(entry.id)
+    setEditDraft(entry.keyword)
+  }
+
+  const saveEditEntry = async (entry: BrainstormEntry) => {
+    const kw = editDraft.trim()
+    if (!kw) return
+    const updated = await brainstormRepo.update(entry.id, { keyword: kw })
+    setBrainstormEntries(prev => prev.map(e => e.id === entry.id ? updated : e))
+    setEditingEntry(null)
+  }
+
+  const deleteEntry = async (id: string) => {
+    await brainstormRepo.remove(id)
+    setBrainstormEntries(prev => prev.filter(e => e.id !== id))
+  }
+
+  const addEntry = async (category: BrainstormCategory, sentiment: "positive" | "negative") => {
+    const key = `${category}_${sentiment}`
+    const kw = (newKeyword[key] ?? "").trim()
+    if (!kw) return
+    const created = await brainstormRepo.create({ site_id: SITE_ID, category, sentiment, keyword: kw })
+    setBrainstormEntries(prev => [created, ...prev])
+    setNewKeyword(prev => ({ ...prev, [key]: "" }))
   }
 
   useEffect(() => { load() }, [])
@@ -246,9 +284,19 @@ export default function AmeliorationsPage() {
       </div>
 
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-4">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 uppercase tracking-widest">
-          <QrCode className="w-3.5 h-3.5" />
-          Brainstorming réunion d'équipe
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 uppercase tracking-widest">
+            <QrCode className="w-3.5 h-3.5" />
+            Brainstorming réunion d'équipe
+          </div>
+          <Button
+            size="sm"
+            variant={brainstormOpen ? "outline" : "default"}
+            className={brainstormOpen ? "" : "bg-red-600 hover:bg-red-500 text-white"}
+            onClick={toggleBrainstormOpen}
+          >
+            {brainstormOpen ? "Fermer les réponses" : "Réponses fermées — Réouvrir"}
+          </Button>
         </div>
         <div className="flex flex-col sm:flex-row gap-6 items-start">
           {brainstormUrl && (
@@ -275,6 +323,26 @@ export default function AmeliorationsPage() {
                     const entries = brainstormEntries.filter(e => e.category === cat.id)
                     const positives = entries.filter(e => e.sentiment === 'positive')
                     const negatives = entries.filter(e => e.sentiment === 'negative')
+                    const renderTag = (e: BrainstormEntry, colorClasses: string) => (
+                      editingEntry === e.id ? (
+                        <span key={e.id} className="inline-flex items-center gap-1">
+                          <input
+                            value={editDraft}
+                            onChange={ev => setEditDraft(ev.target.value)}
+                            onKeyDown={ev => { if (ev.key === "Enter") saveEditEntry(e); if (ev.key === "Escape") setEditingEntry(null) }}
+                            autoFocus
+                            className="text-xs px-2 py-0.5 rounded-full border bg-slate-800 text-white border-slate-600 w-24"
+                          />
+                          <button onClick={() => saveEditEntry(e)} className="text-[11px] text-green-400 hover:text-green-300">✓</button>
+                          <button onClick={() => setEditingEntry(null)} className="text-[11px] text-slate-500 hover:text-slate-400">✕</button>
+                        </span>
+                      ) : (
+                        <span key={e.id} className={`group inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${colorClasses}`}>
+                          <button onClick={() => startEditEntry(e)} className="hover:underline">{e.keyword}</button>
+                          <button onClick={() => deleteEntry(e.id)} className="opacity-40 hover:opacity-100">×</button>
+                        </span>
+                      )
+                    )
                     return (
                       <div key={cat.id} className="bg-slate-900/50 border border-slate-700 rounded-lg p-3 space-y-2">
                         <div className="text-sm font-medium text-white">{cat.label}</div>
@@ -282,28 +350,30 @@ export default function AmeliorationsPage() {
                           <div className="flex items-center gap-1 text-[11px] text-green-400 font-medium">
                             <ThumbsUp className="w-3 h-3" /> Positif
                           </div>
-                          <div className="flex flex-wrap gap-1">
-                            {positives.length === 0 ? (
-                              <span className="text-[11px] text-slate-500">—</span>
-                            ) : positives.map(e => (
-                              <span key={e.id} className="text-xs px-2 py-0.5 rounded-full border bg-green-500/10 text-green-400 border-green-500/30">
-                                {e.keyword}
-                              </span>
-                            ))}
+                          <div className="flex flex-wrap items-center gap-1">
+                            {positives.map(e => renderTag(e, "bg-green-500/10 text-green-400 border-green-500/30"))}
+                            <input
+                              value={newKeyword[`${cat.id}_positive`] ?? ""}
+                              onChange={ev => setNewKeyword(prev => ({ ...prev, [`${cat.id}_positive`]: ev.target.value }))}
+                              onKeyDown={ev => { if (ev.key === "Enter") addEntry(cat.id, "positive") }}
+                              placeholder="+ ajouter"
+                              className="text-xs px-2 py-0.5 rounded-full border bg-transparent text-slate-400 border-slate-700 placeholder-slate-600 w-20 focus:outline-none focus:border-green-500"
+                            />
                           </div>
                         </div>
                         <div className="space-y-1">
                           <div className="flex items-center gap-1 text-[11px] text-amber-400 font-medium">
                             <ThumbsDown className="w-3 h-3" /> À améliorer
                           </div>
-                          <div className="flex flex-wrap gap-1">
-                            {negatives.length === 0 ? (
-                              <span className="text-[11px] text-slate-500">—</span>
-                            ) : negatives.map(e => (
-                              <span key={e.id} className="text-xs px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/30">
-                                {e.keyword}
-                              </span>
-                            ))}
+                          <div className="flex flex-wrap items-center gap-1">
+                            {negatives.map(e => renderTag(e, "bg-amber-500/10 text-amber-400 border-amber-500/30"))}
+                            <input
+                              value={newKeyword[`${cat.id}_negative`] ?? ""}
+                              onChange={ev => setNewKeyword(prev => ({ ...prev, [`${cat.id}_negative`]: ev.target.value }))}
+                              onKeyDown={ev => { if (ev.key === "Enter") addEntry(cat.id, "negative") }}
+                              placeholder="+ ajouter"
+                              className="text-xs px-2 py-0.5 rounded-full border bg-transparent text-slate-400 border-slate-700 placeholder-slate-600 w-20 focus:outline-none focus:border-amber-500"
+                            />
                           </div>
                         </div>
                       </div>

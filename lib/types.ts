@@ -58,6 +58,11 @@ export interface BrainstormEntry {
   created_at: string
 }
 
+export interface BrainstormSettings {
+  site_id: string
+  is_open: boolean
+}
+
 export type ImprovementZone = 'parc' | 'anniv' | 'bar' | 'caisse'
 export type ImprovementKind = 'positive' | 'improvement'
 

@@ -236,3 +236,12 @@ CREATE TABLE brainstorm_entries (
 
 ALTER TABLE brainstorm_entries ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "public_all" ON brainstorm_entries FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Brainstorm session settings: open/close the public form
+CREATE TABLE brainstorm_settings (
+  site_id UUID PRIMARY KEY REFERENCES sites(id) ON DELETE CASCADE,
+  is_open BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+ALTER TABLE brainstorm_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "public_all" ON brainstorm_settings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);

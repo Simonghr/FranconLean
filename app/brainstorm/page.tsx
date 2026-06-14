@@ -1,6 +1,6 @@
 "use client"
-import { useState } from "react"
-import { ThumbsUp, ThumbsDown, CheckCircle2, Sparkles } from "lucide-react"
+import { useState, useEffect } from "react"
+import { ThumbsUp, ThumbsDown, CheckCircle2, Sparkles, Lock } from "lucide-react"
 import * as brainstormRepo from "@/lib/repositories/brainstorm"
 import type { BrainstormCategory, BrainstormSentiment } from "@/lib/types"
 
@@ -94,9 +94,29 @@ function KeywordField({
 }
 
 export default function BrainstormPage() {
+  const [isOpen, setIsOpen] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    brainstormRepo.getSettings(SITE_ID).then(s => setIsOpen(s.is_open))
+  }, [])
+
   const handleSubmit = async (category: BrainstormCategory, sentiment: BrainstormSentiment, keyword: string) => {
     await brainstormRepo.create({ site_id: SITE_ID, category, sentiment, keyword })
   }
+
+  if (isOpen === false) {
+    return (
+      <div className="min-h-screen bg-slate-950 px-4 py-8 flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <Lock className="w-8 h-8 text-slate-500 mx-auto" />
+          <h1 className="text-xl font-bold text-white">Les réponses sont closes</h1>
+          <p className="text-slate-400 text-sm">Merci pour ta participation, le brainstorming est terminé.</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (isOpen === null) return null
 
   return (
     <div className="min-h-screen bg-slate-950 px-4 py-8">
