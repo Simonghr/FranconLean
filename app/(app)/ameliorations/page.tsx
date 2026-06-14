@@ -48,6 +48,7 @@ export default function AmeliorationsPage() {
   const [editingEntry, setEditingEntry] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState("")
   const [newKeyword, setNewKeyword] = useState<Record<string, string>>({})
+  const [categoryFilter, setCategoryFilter] = useState<BrainstormCategory | "all">("all")
   const [openComment, setOpenComment] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState("")
 
@@ -234,7 +235,7 @@ export default function AmeliorationsPage() {
 
               {(() => {
                 const sentiment = k === 'positive' ? 'positive' : 'negative'
-                const entries = brainstormEntries.filter(e => e.sentiment === sentiment)
+                const entries = brainstormEntries.filter(e => e.sentiment === sentiment && (categoryFilter === "all" || e.category === categoryFilter))
                 return (
                   <div className="flex flex-wrap items-center gap-1.5 mb-3">
                     {entries.map(e => (
@@ -376,6 +377,14 @@ export default function AmeliorationsPage() {
             Brainstorming réunion d'équipe
           </div>
           <div className="flex items-center gap-2">
+            <select
+              value={categoryFilter}
+              onChange={ev => setCategoryFilter(ev.target.value as BrainstormCategory | "all")}
+              className="text-xs px-2 py-1.5 rounded-lg border bg-slate-900 text-slate-300 border-slate-700 focus:outline-none focus:border-indigo-500"
+            >
+              <option value="all">Tous les thèmes</option>
+              {ALL_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
             <Button size="sm" variant="outline" onClick={resetBrainstorm}>
               Réinitialiser
             </Button>
