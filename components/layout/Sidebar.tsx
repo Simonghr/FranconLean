@@ -10,7 +10,7 @@ import { useAuth } from "@/lib/context/AuthContext"
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Tableau de bord" },
-  { href: "/ameliorations", icon: ListChecks, label: "Amélioration" },
+  { href: "/ameliorations", icon: ListChecks, label: "Anniversaire" },
   { href: "/performance", icon: TrendingUp, label: "Performance CA" },
   { href: "/incidents", icon: AlertTriangle, label: "Incidents" },
   { href: "/gx", icon: Star, label: "GX Score" },

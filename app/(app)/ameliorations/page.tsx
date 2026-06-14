@@ -1,32 +1,16 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Plus, Trash2, RefreshCw, ListChecks, MessageSquare, Calendar, ThumbsUp, Wrench } from "lucide-react"
+import { Plus, Trash2, RefreshCw, Cake, MessageSquare, Calendar, ThumbsUp, Wrench } from "lucide-react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import * as improvementsRepo from "@/lib/repositories/improvements"
-import type { Improvement, ImprovementZone, ImprovementKind } from "@/lib/types"
+import type { Improvement, ImprovementKind } from "@/lib/types"
 
 const SITE_ID = '00000000-0000-0000-0000-000000000001'
-
-const ZONES: ImprovementZone[] = ['parc', 'anniv', 'bar', 'caisse']
-
-const zoneLabels: Record<ImprovementZone, string> = {
-  parc: "Parc",
-  anniv: "Anniv",
-  bar: "Bar",
-  caisse: "Caisse",
-}
-
-const zoneStyles: Record<ImprovementZone, { tab: string; bar: string; badge: string }> = {
-  parc:   { tab: "data-[state=active]:bg-green-600",  bar: "border-l-green-500",  badge: "bg-green-500/10 text-green-400 border-green-500/20" },
-  anniv:  { tab: "data-[state=active]:bg-pink-600",   bar: "border-l-pink-500",   badge: "bg-pink-500/10 text-pink-400 border-pink-500/20" },
-  bar:    { tab: "data-[state=active]:bg-orange-600", bar: "border-l-orange-500", badge: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
-  caisse: { tab: "data-[state=active]:bg-blue-600",   bar: "border-l-blue-500",   badge: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
-}
+const ZONE = 'anniv' as const
 
 const kindConfig: Record<ImprovementKind, { label: string; icon: typeof ThumbsUp; activeBtn: string; bar: string }> = {
   positive:    { label: "Point positif",    icon: ThumbsUp, activeBtn: "bg-green-600 text-white hover:bg-green-500",  bar: "border-l-green-500" },
@@ -36,7 +20,6 @@ const kindConfig: Record<ImprovementKind, { label: string; icon: typeof ThumbsUp
 export default function AmeliorationsPage() {
   const [items, setItems] = useState<Improvement[]>([])
   const [loading, setLoading] = useState(true)
-  const [zone, setZone] = useState<ImprovementZone>('parc')
   const [newItems, setNewItems] = useState<Record<ImprovementKind, string>>({ positive: "", improvement: "" })
   const [openComment, setOpenComment] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState("")
@@ -53,12 +36,12 @@ export default function AmeliorationsPage() {
 
   useEffect(() => { load() }, [])
 
-  const zoneItems = items.filter(i => i.zone === zone)
+  const zoneItems = items.filter(i => i.zone === ZONE)
 
   const handleAdd = async (kind: ImprovementKind) => {
     const description = newItems[kind].trim()
     if (!description) return
-    const created = await improvementsRepo.create({ site_id: SITE_ID, zone, kind, description })
+    const created = await improvementsRepo.create({ site_id: SITE_ID, zone: ZONE, kind, description })
     setItems(prev => [{ ...created, kind: created.kind ?? kind }, ...prev])
     setNewItems(prev => ({ ...prev, [kind]: "" }))
   }
@@ -89,29 +72,17 @@ export default function AmeliorationsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <ListChecks className="w-6 h-6 text-blue-400" />
-            Amélioration
+            <Cake className="w-6 h-6 text-pink-400" />
+            Anniversaire
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            Points à améliorer pour le week-end prochain, par zone
+            Points à améliorer pour le week-end prochain
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
           Actualiser
         </Button>
-      </div>
-
-      <Tabs value={zone} onValueChange={v => setZone(v as ImprovementZone)}>
-        <TabsList>
-          {ZONES.map(z => (
-            <TabsTrigger key={z} value={z} className={zoneStyles[z].tab}>{zoneLabels[z]}</TabsTrigger>
-          ))}
-        </TabsList>
-      </Tabs>
-
-      <div className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${zoneStyles[zone].badge}`}>
-        Zone : {zoneLabels[zone]}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
