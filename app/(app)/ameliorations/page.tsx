@@ -1,6 +1,6 @@
 "use client"
-import { useState, useEffect } from "react"
-import { Plus, Trash2, RefreshCw, Cake, MessageSquare, Calendar, ThumbsUp, ThumbsDown, Wrench, Star, QrCode, ArrowLeftRight } from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
+import { Plus, Trash2, RefreshCw, Cake, MessageSquare, Calendar, ThumbsUp, ThumbsDown, Wrench, Star, QrCode, ArrowLeftRight, Sparkles } from "lucide-react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { Button } from "@/components/ui/button"
@@ -49,6 +49,7 @@ export default function AmeliorationsPage() {
   const [editDraft, setEditDraft] = useState("")
   const [newKeyword, setNewKeyword] = useState<Record<string, string>>({})
   const [categoryFilter, setCategoryFilter] = useState<BrainstormCategory | "all">("all")
+  const [showSynthesis, setShowSynthesis] = useState(false)
   const [openComment, setOpenComment] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState("")
 
@@ -160,6 +161,29 @@ export default function AmeliorationsPage() {
   }, [])
 
   const zoneItems = items.filter(i => i.zone === ZONE)
+
+  const synthesis = useMemo(() => {
+    const topKeywords = (category: BrainstormCategory, sentiment: "positive" | "negative") => {
+      const counts = new Map<string, number>()
+      brainstormEntries
+        .filter(e => e.category === category && e.sentiment === sentiment)
+        .forEach(e => {
+          const kw = e.keyword.trim().toLowerCase()
+          counts.set(kw, (counts.get(kw) ?? 0) + 1)
+        })
+      return [...counts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([kw]) => kw)
+    }
+    return ALL_CATEGORIES
+      .map(cat => ({
+        category: cat,
+        positive: topKeywords(cat.id, "positive"),
+        negative: topKeywords(cat.id, "negative"),
+      }))
+      .filter(s => s.positive.length > 0 || s.negative.length > 0)
+  }, [brainstormEntries])
 
   const handleAdd = async (kind: ImprovementKind) => {
     const description = newItems[kind].trim()
@@ -385,6 +409,14 @@ export default function AmeliorationsPage() {
               <option value="all">Tous les thèmes</option>
               {ALL_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
             </select>
+            <Button
+              size="sm"
+              className={showSynthesis ? "bg-indigo-600 hover:bg-indigo-500 text-white" : "bg-indigo-600/80 hover:bg-indigo-500 text-white"}
+              onClick={() => setShowSynthesis(s => !s)}
+            >
+              <Sparkles className="w-4 h-4 mr-1.5" />
+              {showSynthesis ? "Masquer la synthèse" : "Synthèse"}
+            </Button>
             <Button size="sm" variant="outline" onClick={resetBrainstorm}>
               Réinitialiser
             </Button>
@@ -398,6 +430,35 @@ export default function AmeliorationsPage() {
             </Button>
           </div>
         </div>
+        {showSynthesis && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {synthesis.length === 0 ? (
+              <div className="text-sm text-slate-400 col-span-full text-center py-4">
+                Pas encore assez de réponses pour une synthèse.
+              </div>
+            ) : synthesis.map(s => (
+              <div key={s.category.id} className="bg-slate-900/60 border border-slate-700 rounded-lg p-3 space-y-2">
+                <div className="text-sm font-semibold text-white">{s.category.label}</div>
+                {s.positive.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <ThumbsUp className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
+                    {s.positive.map(kw => (
+                      <span key={kw} className="text-xs px-2 py-0.5 rounded-full border bg-green-500/10 text-green-400 border-green-500/30">{kw}</span>
+                    ))}
+                  </div>
+                )}
+                {s.negative.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <ThumbsDown className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                    {s.negative.map(kw => (
+                      <span key={kw} className="text-xs px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/30">{kw}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         {brainstormUrl ? (
           <button
             type="button"
