@@ -22,32 +22,17 @@ const kindConfig: Record<ImprovementKind, { label: string; icon: typeof ThumbsUp
   improvement: { label: "Point à améliorer", icon: Wrench,   activeBtn: "bg-amber-600 text-white hover:bg-amber-500", bar: "border-l-amber-500" },
 }
 
-const BRAINSTORM_GROUPS: { title: string; categories: { id: BrainstormCategory; label: string }[] }[] = [
-  {
-    title: "Prestations",
-    categories: [
-      { id: "accueil", label: "Accueil" },
-      { id: "salles", label: "Salles" },
-      { id: "extensions", label: "Extensions" },
-    ],
-  },
-  {
-    title: "Équipe",
-    categories: [
-      { id: "ambiance", label: "Ambiance" },
-      { id: "communication", label: "Communication" },
-      { id: "comprehension", label: "Compréhension" },
-      { id: "entraide", label: "Entraide" },
-    ],
-  },
-  {
-    title: "Client",
-    categories: [
-      { id: "satisfaction", label: "Satisfaction" },
-      { id: "accompagnement", label: "Accompagnement" },
-      { id: "feedback", label: "Feed-back" },
-    ],
-  },
+const CATEGORY_LABEL: Record<BrainstormCategory, string> = {
+  accueil: "Accueil", salles: "Salles", extensions: "Extensions",
+  ambiance: "Ambiance", communication: "Communication", comprehension: "Compréhension", entraide: "Entraide",
+  satisfaction: "Satisfaction", accompagnement: "Accompagnement", feedback: "Feed-back",
+}
+
+const ALL_CATEGORIES: { id: BrainstormCategory; label: string }[] = [
+  { id: "accueil", label: "Accueil" }, { id: "salles", label: "Salles" }, { id: "extensions", label: "Extensions" },
+  { id: "ambiance", label: "Ambiance" }, { id: "communication", label: "Communication" },
+  { id: "comprehension", label: "Compréhension" }, { id: "entraide", label: "Entraide" },
+  { id: "satisfaction", label: "Satisfaction" }, { id: "accompagnement", label: "Accompagnement" }, { id: "feedback", label: "Feed-back" },
 ]
 
 export default function AmeliorationsPage() {
@@ -108,13 +93,17 @@ export default function AmeliorationsPage() {
     setBrainstormEntries(prev => prev.filter(e => e.id !== id))
   }
 
-  const addEntry = async (category: BrainstormCategory, sentiment: "positive" | "negative") => {
-    const key = `${category}_${sentiment}`
-    const kw = (newKeyword[key] ?? "").trim()
+  const addEntry = async (category: BrainstormCategory, sentiment: "positive" | "negative", keyword: string) => {
+    const kw = keyword.trim()
     if (!kw) return
     const created = await brainstormRepo.create({ site_id: SITE_ID, category, sentiment, keyword: kw })
     setBrainstormEntries(prev => [created, ...prev])
-    setNewKeyword(prev => ({ ...prev, [key]: "" }))
+  }
+
+  const resetBrainstorm = async () => {
+    if (!window.confirm("Réinitialiser toutes les réponses du brainstorming ?")) return
+    await brainstormRepo.removeAll(SITE_ID)
+    setBrainstormEntries([])
   }
 
   useEffect(() => { load() }, [])
@@ -207,6 +196,58 @@ export default function AmeliorationsPage() {
                 </Button>
               </div>
 
+              {(() => {
+                const sentiment = k === 'positive' ? 'positive' : 'negative'
+                const entries = brainstormEntries.filter(e => e.sentiment === sentiment)
+                return (
+                  <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                    {entries.map(e => (
+                      editingEntry === e.id ? (
+                        <span key={e.id} className="inline-flex items-center gap-1">
+                          <input
+                            value={editDraft}
+                            onChange={ev => setEditDraft(ev.target.value)}
+                            onKeyDown={ev => { if (ev.key === "Enter") saveEditEntry(e); if (ev.key === "Escape") setEditingEntry(null) }}
+                            autoFocus
+                            className="text-xs px-2 py-0.5 rounded-full border bg-slate-900 text-white border-slate-600 w-28"
+                          />
+                          <button onClick={() => saveEditEntry(e)} className="text-[11px] text-green-400 hover:text-green-300">✓</button>
+                          <button onClick={() => setEditingEntry(null)} className="text-[11px] text-slate-500 hover:text-slate-400">✕</button>
+                        </span>
+                      ) : (
+                        <span key={e.id} className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
+                          sentiment === "positive" ? "bg-green-500/10 text-green-400 border-green-500/30" : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                        }`}>
+                          <span className="text-slate-500">{CATEGORY_LABEL[e.category]}:</span>
+                          <button onClick={() => startEditEntry(e)} className="hover:underline">{e.keyword}</button>
+                          <button onClick={() => deleteEntry(e.id)} className="opacity-40 hover:opacity-100">×</button>
+                        </span>
+                      )
+                    ))}
+                    <select
+                      value={newKeyword[`${k}_cat`] ?? ALL_CATEGORIES[0].id}
+                      onChange={ev => setNewKeyword(prev => ({ ...prev, [`${k}_cat`]: ev.target.value }))}
+                      className="text-xs px-1.5 py-0.5 rounded-full border bg-transparent text-slate-400 border-slate-700 focus:outline-none"
+                    >
+                      {ALL_CATEGORIES.map(c => <option key={c.id} value={c.id} className="bg-slate-800">{c.label}</option>)}
+                    </select>
+                    <input
+                      value={newKeyword[`${k}_kw`] ?? ""}
+                      onChange={ev => setNewKeyword(prev => ({ ...prev, [`${k}_kw`]: ev.target.value }))}
+                      onKeyDown={ev => {
+                        if (ev.key === "Enter") {
+                          const cat = (newKeyword[`${k}_cat`] ?? ALL_CATEGORIES[0].id) as BrainstormCategory
+                          addEntry(cat, sentiment, newKeyword[`${k}_kw`] ?? "")
+                          setNewKeyword(prev => ({ ...prev, [`${k}_kw`]: "" }))
+                        }
+                      }}
+                      placeholder="+ mot-clé"
+                      className="text-xs px-2 py-0.5 rounded-full border bg-transparent text-slate-400 border-slate-700 placeholder-slate-600 w-20 focus:outline-none focus:border-slate-500"
+                    />
+                  </div>
+                )
+              })()}
+
               {kindItems.length === 0 ? (
                 <div className="text-center text-slate-500 text-sm py-6">
                   Aucune idée pour le moment.
@@ -289,101 +330,35 @@ export default function AmeliorationsPage() {
             <QrCode className="w-3.5 h-3.5" />
             Brainstorming réunion d'équipe
           </div>
-          <Button
-            size="sm"
-            variant={brainstormOpen ? "outline" : "default"}
-            className={brainstormOpen ? "" : "bg-red-600 hover:bg-red-500 text-white"}
-            onClick={toggleBrainstormOpen}
-          >
-            {brainstormOpen ? "Fermer les réponses" : "Réponses fermées — Réouvrir"}
-          </Button>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-6 items-start">
-          {brainstormUrl && (
-            <button
-              type="button"
-              onClick={() => setQrExpanded(true)}
-              className="bg-white p-2 rounded-lg flex-shrink-0 hover:opacity-90 transition-opacity"
-              title="Agrandir le QR code"
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={resetBrainstorm}>
+              Réinitialiser
+            </Button>
+            <Button
+              size="sm"
+              variant={brainstormOpen ? "outline" : "default"}
+              className={brainstormOpen ? "" : "bg-red-600 hover:bg-red-500 text-white"}
+              onClick={toggleBrainstormOpen}
             >
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(brainstormUrl)}`}
-                alt="QR code brainstorming"
-                width={180}
-                height={180}
-              />
-            </button>
-          )}
-          <div className="flex-1 w-full space-y-4">
-            {BRAINSTORM_GROUPS.map(group => (
-              <div key={group.title}>
-                <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">{group.title}</div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {group.categories.map(cat => {
-                    const entries = brainstormEntries.filter(e => e.category === cat.id)
-                    const positives = entries.filter(e => e.sentiment === 'positive')
-                    const negatives = entries.filter(e => e.sentiment === 'negative')
-                    const renderTag = (e: BrainstormEntry, colorClasses: string) => (
-                      editingEntry === e.id ? (
-                        <span key={e.id} className="inline-flex items-center gap-1">
-                          <input
-                            value={editDraft}
-                            onChange={ev => setEditDraft(ev.target.value)}
-                            onKeyDown={ev => { if (ev.key === "Enter") saveEditEntry(e); if (ev.key === "Escape") setEditingEntry(null) }}
-                            autoFocus
-                            className="text-xs px-2 py-0.5 rounded-full border bg-slate-800 text-white border-slate-600 w-24"
-                          />
-                          <button onClick={() => saveEditEntry(e)} className="text-[11px] text-green-400 hover:text-green-300">✓</button>
-                          <button onClick={() => setEditingEntry(null)} className="text-[11px] text-slate-500 hover:text-slate-400">✕</button>
-                        </span>
-                      ) : (
-                        <span key={e.id} className={`group inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${colorClasses}`}>
-                          <button onClick={() => startEditEntry(e)} className="hover:underline">{e.keyword}</button>
-                          <button onClick={() => deleteEntry(e.id)} className="opacity-40 hover:opacity-100">×</button>
-                        </span>
-                      )
-                    )
-                    return (
-                      <div key={cat.id} className="bg-slate-900/50 border border-slate-700 rounded-lg p-3 space-y-2">
-                        <div className="text-sm font-medium text-white">{cat.label}</div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-[11px] text-green-400 font-medium">
-                            <ThumbsUp className="w-3 h-3" /> Positif
-                          </div>
-                          <div className="flex flex-wrap items-center gap-1">
-                            {positives.map(e => renderTag(e, "bg-green-500/10 text-green-400 border-green-500/30"))}
-                            <input
-                              value={newKeyword[`${cat.id}_positive`] ?? ""}
-                              onChange={ev => setNewKeyword(prev => ({ ...prev, [`${cat.id}_positive`]: ev.target.value }))}
-                              onKeyDown={ev => { if (ev.key === "Enter") addEntry(cat.id, "positive") }}
-                              placeholder="+ ajouter"
-                              className="text-xs px-2 py-0.5 rounded-full border bg-transparent text-slate-400 border-slate-700 placeholder-slate-600 w-20 focus:outline-none focus:border-green-500"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1 text-[11px] text-amber-400 font-medium">
-                            <ThumbsDown className="w-3 h-3" /> À améliorer
-                          </div>
-                          <div className="flex flex-wrap items-center gap-1">
-                            {negatives.map(e => renderTag(e, "bg-amber-500/10 text-amber-400 border-amber-500/30"))}
-                            <input
-                              value={newKeyword[`${cat.id}_negative`] ?? ""}
-                              onChange={ev => setNewKeyword(prev => ({ ...prev, [`${cat.id}_negative`]: ev.target.value }))}
-                              onKeyDown={ev => { if (ev.key === "Enter") addEntry(cat.id, "negative") }}
-                              placeholder="+ ajouter"
-                              className="text-xs px-2 py-0.5 rounded-full border bg-transparent text-slate-400 border-slate-700 placeholder-slate-600 w-20 focus:outline-none focus:border-amber-500"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ))}
+              {brainstormOpen ? "Fermer les réponses" : "Réponses fermées — Réouvrir"}
+            </Button>
           </div>
         </div>
+        {brainstormUrl && (
+          <button
+            type="button"
+            onClick={() => setQrExpanded(true)}
+            className="bg-white p-2 rounded-lg inline-block hover:opacity-90 transition-opacity"
+            title="Agrandir le QR code"
+          >
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(brainstormUrl)}`}
+              alt="QR code brainstorming"
+              width={180}
+              height={180}
+            />
+          </button>
+        )}
       </div>
 
       {anniversaryReviews.length > 0 && (
