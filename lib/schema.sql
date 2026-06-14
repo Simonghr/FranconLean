@@ -246,3 +246,6 @@ CREATE TABLE brainstorm_settings (
 
 ALTER TABLE brainstorm_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "public_all" ON brainstorm_settings FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+-- Role-based page access: 'collaborator' accounts (e.g. Celia) are restricted to a limited set of pages
+ALTER TABLE profiles ADD COLUMN role TEXT NOT NULL DEFAULT 'admin' CHECK (role IN ('admin', 'director', 'manager', 'collaborator'));
