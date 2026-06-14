@@ -112,9 +112,13 @@ export default function AmeliorationsPage() {
   }
 
   const generateQrCode = async () => {
-    const updated = await brainstormRepo.newSession(SITE_ID)
-    setBrainstormOpen(updated.is_open)
-    setBrainstormSessionId(updated.session_id)
+    try {
+      const updated = await brainstormRepo.newSession(SITE_ID)
+      setBrainstormOpen(updated.is_open)
+      setBrainstormSessionId(updated.session_id)
+    } catch (err: any) {
+      window.alert(`Erreur : ${err?.message ?? err}\n\nVérifie que la table brainstorm_settings (avec la colonne session_id) existe dans Supabase.`)
+    }
   }
 
   useEffect(() => { load() }, [])
