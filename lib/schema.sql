@@ -220,3 +220,6 @@ ALTER TABLE improvements ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "public_all" ON improvements FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
 ALTER TABLE improvements ADD COLUMN kind TEXT NOT NULL DEFAULT 'improvement' CHECK (kind IN ('positive', 'improvement'));
+
+-- Link GX reviews to their Roller booking, to surface reviews tied to Anniversaire bookings
+ALTER TABLE gx_reviews ADD COLUMN booking_reference TEXT;

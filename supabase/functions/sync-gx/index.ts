@@ -235,6 +235,7 @@ Deno.serve(async (req) => {
               date: day,
               roller_id: rollerId,
               guest_name: null,
+              booking_reference: item?.bookingReference ? String(item.bookingReference) : null,
               overall_rating: item?.overallRating ?? null,
               service_rating: item?.serviceRating ?? null,
               service_rating_reasons: item?.serviceRatingReasons ?? null,

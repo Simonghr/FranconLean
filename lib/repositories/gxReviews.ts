@@ -18,6 +18,7 @@ export interface GxReview {
   is_fan: boolean
   is_critic: boolean
   comment?: string
+  booking_reference?: string | null
   created_at: string
 }
 

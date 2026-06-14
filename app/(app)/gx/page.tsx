@@ -14,6 +14,7 @@ import { GxChart } from "@/components/charts/GxChart"
 import * as feedbackRepo from "@/lib/repositories/feedback"
 import * as gxRepo from "@/lib/repositories/gx"
 import * as gxReviewsRepo from "@/lib/repositories/gxReviews"
+import * as bookingsRepo from "@/lib/repositories/bookings"
 import type { GxReview } from "@/lib/repositories/gxReviews"
 import { translateTag } from "@/lib/gxTagTranslations"
 import type { CustomerFeedback, FeedbackCategory, FeedbackSentiment, GxScore } from "@/lib/types"
@@ -54,6 +55,7 @@ export default function GxScorePage() {
   const [feedbacks, setFeedbacks] = useState<CustomerFeedback[]>([])
   const [gxScores, setGxScores] = useState<GxScore[]>([])
   const [reviews, setReviews] = useState<GxReview[]>([])
+  const [anniversaryBookingRefs, setAnniversaryBookingRefs] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [filterSentiment, setFilterSentiment] = useState("all")
@@ -72,8 +74,12 @@ export default function GxScorePage() {
       feedbackRepo.getAll(SITE_ID),
       gxRepo.getAll(SITE_ID),
       gxReviewsRepo.getRecent(SITE_ID, 500),
+      bookingsRepo.getAnniversaryBookings(SITE_ID),
     ])
-      .then(([fb, gx, rev]) => { setFeedbacks(fb); setGxScores(gx); setReviews(rev) })
+      .then(([fb, gx, rev, bookings]) => {
+        setFeedbacks(fb); setGxScores(gx); setReviews(rev)
+        setAnniversaryBookingRefs(new Set(bookings.map(b => b.roller_booking_id)))
+      })
       .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
@@ -177,6 +183,9 @@ export default function GxScorePage() {
       return reviews.filter(r => r.date >= monthStart && r.date <= monthEnd)
     }
   })()
+
+  // ── Avis liés à des réservations Anniversaire ───────────────────────────────
+  const anniversaryReviews = reviews.filter(r => r.booking_reference && anniversaryBookingRefs.has(r.booking_reference))
 
   // ── Tag synthesis ─────────────────────────────────────────────────────────
   const tagSynthesis = (() => {
@@ -462,6 +471,44 @@ export default function GxScorePage() {
                   </div>
 
                   {/* Free text comment */}
+                  {r.comment && (
+                    <p className="text-sm text-slate-200 leading-relaxed border-t border-slate-700 pt-3">
+                      "{r.comment}"
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Reviews tied to Anniversaire bookings */}
+      {anniversaryReviews.length > 0 && (
+        <div>
+          <h2 className="text-base font-semibold text-white flex items-center gap-2 mb-4">
+            <Star className="w-4 h-4 text-pink-400 fill-pink-400" />
+            Avis clients — réservations Anniversaire ({anniversaryReviews.length})
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {anniversaryReviews.map(r => {
+              const overallStars = r.overall_rating ?? (r.is_fan ? 5 : r.is_critic ? 2 : 3)
+              const borderColor = r.is_fan ? "border-green-500/30 bg-green-500/5" : r.is_critic ? "border-red-500/30 bg-red-500/5" : "border-pink-500/30 bg-pink-500/5"
+              return (
+                <div key={r.id} className={`bg-slate-800 border ${borderColor} rounded-xl p-4 space-y-3`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-xs font-semibold text-pink-400 flex items-center gap-1">
+                      🎂 Anniversaire
+                    </span>
+                    <span className="text-xs text-slate-500 shrink-0">
+                      {format(new Date(r.date), "dd/MM/yyyy", { locale: fr })}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-0.5">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star key={i} className={`w-3.5 h-3.5 ${i < overallStars ? "text-amber-400 fill-amber-400" : "text-slate-600"}`} />
+                    ))}
+                  </div>
                   {r.comment && (
                     <p className="text-sm text-slate-200 leading-relaxed border-t border-slate-700 pt-3">
                       "{r.comment}"
