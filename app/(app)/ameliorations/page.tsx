@@ -1,12 +1,15 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Plus, Trash2, RefreshCw, Cake, MessageSquare, Calendar, ThumbsUp, Wrench } from "lucide-react"
+import { Plus, Trash2, RefreshCw, Cake, MessageSquare, Calendar, ThumbsUp, Wrench, Star } from "lucide-react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import * as improvementsRepo from "@/lib/repositories/improvements"
+import * as gxReviewsRepo from "@/lib/repositories/gxReviews"
+import * as bookingsRepo from "@/lib/repositories/bookings"
+import type { GxReview } from "@/lib/repositories/gxReviews"
 import type { Improvement, ImprovementKind } from "@/lib/types"
 
 const SITE_ID = '00000000-0000-0000-0000-000000000001'
@@ -19,6 +22,7 @@ const kindConfig: Record<ImprovementKind, { label: string; icon: typeof ThumbsUp
 
 export default function AmeliorationsPage() {
   const [items, setItems] = useState<Improvement[]>([])
+  const [anniversaryReviews, setAnniversaryReviews] = useState<GxReview[]>([])
   const [loading, setLoading] = useState(true)
   const [newItems, setNewItems] = useState<Record<ImprovementKind, string>>({ positive: "", improvement: "" })
   const [openComment, setOpenComment] = useState<string | null>(null)
@@ -27,8 +31,14 @@ export default function AmeliorationsPage() {
   const load = async () => {
     setLoading(true)
     try {
-      const data = await improvementsRepo.getAll(SITE_ID)
+      const [data, reviews, bookings] = await Promise.all([
+        improvementsRepo.getAll(SITE_ID),
+        gxReviewsRepo.getRecent(SITE_ID, 500),
+        bookingsRepo.getAnniversaryBookings(SITE_ID),
+      ])
       setItems(data.map(i => ({ ...i, kind: i.kind ?? 'improvement' })))
+      const refs = new Set(bookings.map(b => b.roller_booking_id))
+      setAnniversaryReviews(reviews.filter(r => r.booking_reference && refs.has(r.booking_reference)))
     } finally {
       setLoading(false)
     }
@@ -184,6 +194,43 @@ export default function AmeliorationsPage() {
           )
         })}
       </div>
+
+      {anniversaryReviews.length > 0 && (
+        <div>
+          <h2 className="text-base font-semibold text-white flex items-center gap-2 mb-4">
+            <Star className="w-4 h-4 text-pink-400 fill-pink-400" />
+            Avis clients — réservations Anniversaire ({anniversaryReviews.length})
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {anniversaryReviews.map(r => {
+              const overallStars = r.overall_rating ?? (r.is_fan ? 5 : r.is_critic ? 2 : 3)
+              const borderColor = r.is_fan ? "border-green-500/30 bg-green-500/5" : r.is_critic ? "border-red-500/30 bg-red-500/5" : "border-pink-500/30 bg-pink-500/5"
+              return (
+                <div key={r.id} className={`bg-slate-800 border ${borderColor} rounded-xl p-4 space-y-3`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-xs font-semibold text-pink-400 flex items-center gap-1">
+                      🎂 Anniversaire
+                    </span>
+                    <span className="text-xs text-slate-500 shrink-0">
+                      {format(new Date(r.date), "dd/MM/yyyy", { locale: fr })}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-0.5">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <Star key={i} className={`w-3.5 h-3.5 ${i < overallStars ? "text-amber-400 fill-amber-400" : "text-slate-600"}`} />
+                    ))}
+                  </div>
+                  {r.comment && (
+                    <p className="text-sm text-slate-200 leading-relaxed border-t border-slate-700 pt-3">
+                      "{r.comment}"
+                    </p>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
