@@ -37,8 +37,7 @@ export default function AmeliorationsPage() {
   const [items, setItems] = useState<Improvement[]>([])
   const [loading, setLoading] = useState(true)
   const [zone, setZone] = useState<ImprovementZone>('parc')
-  const [newItem, setNewItem] = useState("")
-  const [newKind, setNewKind] = useState<ImprovementKind>('improvement')
+  const [newItems, setNewItems] = useState<Record<ImprovementKind, string>>({ positive: "", improvement: "" })
   const [openComment, setOpenComment] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState("")
 
@@ -56,12 +55,12 @@ export default function AmeliorationsPage() {
 
   const zoneItems = items.filter(i => i.zone === zone)
 
-  const handleAdd = async () => {
-    const description = newItem.trim()
+  const handleAdd = async (kind: ImprovementKind) => {
+    const description = newItems[kind].trim()
     if (!description) return
-    const created = await improvementsRepo.create({ site_id: SITE_ID, zone, kind: newKind, description })
-    setItems(prev => [{ ...created, kind: created.kind ?? newKind }, ...prev])
-    setNewItem("")
+    const created = await improvementsRepo.create({ site_id: SITE_ID, zone, kind, description })
+    setItems(prev => [{ ...created, kind: created.kind ?? kind }, ...prev])
+    setNewItems(prev => ({ ...prev, [kind]: "" }))
   }
 
   const toggleDone = async (item: Improvement) => {
@@ -111,57 +110,39 @@ export default function AmeliorationsPage() {
         </TabsList>
       </Tabs>
 
-      <div className={`bg-slate-800 border border-slate-700 border-t-4 ${zoneStyles[zone].bar.replace("border-l-", "border-t-")} rounded-xl p-5`}>
-        <div className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border mb-4 ${zoneStyles[zone].badge}`}>
-          Zone : {zoneLabels[zone]}
-        </div>
-        <div className="flex items-center gap-2 mb-2">
-          <Input
-            value={newItem}
-            onChange={e => setNewItem(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") handleAdd() }}
-            placeholder={`Nouveau point — ${zoneLabels[zone]}`}
-            className="flex-1"
-          />
-          <Button onClick={handleAdd} disabled={!newItem.trim()}>
-            <Plus className="w-4 h-4 mr-2" />
-            Ajouter
-          </Button>
-        </div>
+      <div className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${zoneStyles[zone].badge}`}>
+        Zone : {zoneLabels[zone]}
+      </div>
 
-        <div className="flex items-center gap-2 mb-4">
-          {(Object.entries(kindConfig) as [ImprovementKind, typeof kindConfig[ImprovementKind]][]).map(([k, cfg]) => {
-            const Icon = cfg.icon
-            return (
-              <button
-                key={k}
-                onClick={() => setNewKind(k)}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                  newKind === k ? cfg.activeBtn + " border-transparent" : "text-slate-400 border-slate-700 hover:text-slate-300"
-                }`}
-              >
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {(Object.entries(kindConfig) as [ImprovementKind, typeof kindConfig[ImprovementKind]][]).map(([k, cfg]) => {
+          const Icon = cfg.icon
+          const kindItems = zoneItems.filter(i => i.kind === k)
+          return (
+            <div key={k} className={`bg-slate-800 border border-slate-700 border-t-4 ${cfg.bar.replace("border-l-", "border-t-")} rounded-xl p-4`}>
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 uppercase tracking-widest mb-3">
                 <Icon className="w-3.5 h-3.5" />
-                {cfg.label}
-              </button>
-            )
-          })}
-        </div>
+                {cfg.label}{kindItems.length > 1 ? "s" : ""}
+              </div>
 
-        {zoneItems.length === 0 ? (
-          <div className="text-center text-slate-500 text-sm py-8">
-            Aucun point pour {zoneLabels[zone]} pour le moment.
-          </div>
-        ) : (
-          (Object.entries(kindConfig) as [ImprovementKind, typeof kindConfig[ImprovementKind]][]).map(([k, cfg]) => {
-            const kindItems = zoneItems.filter(i => i.kind === k)
-            if (kindItems.length === 0) return null
-            const Icon = cfg.icon
-            return (
-              <div key={k} className="mb-5 last:mb-0">
-                <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">
-                  <Icon className="w-3.5 h-3.5" />
-                  {cfg.label}{kindItems.length > 1 ? "s" : ""}
+              <div className="flex items-center gap-1.5 mb-3">
+                <Input
+                  value={newItems[k]}
+                  onChange={e => setNewItems(prev => ({ ...prev, [k]: e.target.value }))}
+                  onKeyDown={e => { if (e.key === "Enter") handleAdd(k) }}
+                  placeholder="Nouvelle idée..."
+                  className="h-8 text-sm flex-1"
+                />
+                <Button size="icon" className="h-8 w-8" onClick={() => handleAdd(k)} disabled={!newItems[k].trim()}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
+
+              {kindItems.length === 0 ? (
+                <div className="text-center text-slate-500 text-sm py-6">
+                  Aucune idée pour le moment.
                 </div>
+              ) : (
                 <ul className="space-y-2">
                   {kindItems.map(item => (
                     <li key={item.id} className={`bg-slate-900/50 border border-slate-700 border-l-4 ${cfg.bar} rounded-lg p-3`}>
@@ -227,10 +208,10 @@ export default function AmeliorationsPage() {
                     </li>
                   ))}
                 </ul>
-              </div>
-            )
-          })
-        )}
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
