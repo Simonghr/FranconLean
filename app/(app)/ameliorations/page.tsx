@@ -244,6 +244,29 @@ export default function AmeliorationsPage() {
                 <span className="ml-auto bg-slate-900/40 text-white text-xs rounded-full px-2 py-0.5">{kindItems.length}</span>
               </div>
 
+              {showSynthesis && (() => {
+                const sentiment = k === 'positive' ? 'positive' : 'negative'
+                const rows = synthesis.filter(s => s[sentiment].length > 0)
+                if (rows.length === 0) return null
+                return (
+                  <div className="mb-3 p-2.5 rounded-lg bg-slate-900/40 border border-slate-700/60 space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-300 uppercase tracking-widest">
+                      <Sparkles className="w-3 h-3" /> Synthèse
+                    </div>
+                    {rows.map(s => (
+                      <div key={s.category.id} className="flex items-center gap-1.5 flex-wrap text-xs">
+                        <span className="text-slate-400 font-medium">{s.category.label}:</span>
+                        {s[sentiment].map(kw => (
+                          <span key={kw} className={`px-2 py-0.5 rounded-full border ${
+                            sentiment === "positive" ? "bg-green-500/10 text-green-400 border-green-500/30" : "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                          }`}>{kw}</span>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+
               <div className="flex items-center gap-1.5 mb-3">
                 <Input
                   value={newItems[k]}
@@ -430,35 +453,6 @@ export default function AmeliorationsPage() {
             </Button>
           </div>
         </div>
-        {showSynthesis && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {synthesis.length === 0 ? (
-              <div className="text-sm text-slate-400 col-span-full text-center py-4">
-                Pas encore assez de réponses pour une synthèse.
-              </div>
-            ) : synthesis.map(s => (
-              <div key={s.category.id} className="bg-slate-900/60 border border-slate-700 rounded-lg p-3 space-y-2">
-                <div className="text-sm font-semibold text-white">{s.category.label}</div>
-                {s.positive.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <ThumbsUp className="w-3.5 h-3.5 text-green-400 flex-shrink-0" />
-                    {s.positive.map(kw => (
-                      <span key={kw} className="text-xs px-2 py-0.5 rounded-full border bg-green-500/10 text-green-400 border-green-500/30">{kw}</span>
-                    ))}
-                  </div>
-                )}
-                {s.negative.length > 0 && (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <ThumbsDown className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                    {s.negative.map(kw => (
-                      <span key={kw} className="text-xs px-2 py-0.5 rounded-full border bg-amber-500/10 text-amber-400 border-amber-500/30">{kw}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
         {brainstormUrl ? (
           <button
             type="button"
