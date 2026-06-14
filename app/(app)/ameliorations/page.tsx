@@ -111,6 +111,12 @@ export default function AmeliorationsPage() {
     setBrainstormSessionId(updated.session_id)
   }
 
+  const generateQrCode = async () => {
+    const updated = await brainstormRepo.newSession(SITE_ID)
+    setBrainstormOpen(updated.is_open)
+    setBrainstormSessionId(updated.session_id)
+  }
+
   useEffect(() => { load() }, [])
 
   useEffect(() => {
@@ -350,7 +356,7 @@ export default function AmeliorationsPage() {
             </Button>
           </div>
         </div>
-        {brainstormUrl && (
+        {brainstormUrl ? (
           <button
             type="button"
             onClick={() => setQrExpanded(true)}
@@ -364,6 +370,10 @@ export default function AmeliorationsPage() {
               height={180}
             />
           </button>
+        ) : (
+          <Button size="sm" onClick={generateQrCode}>
+            Générer le QR code
+          </Button>
         )}
       </div>
 
