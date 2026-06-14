@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import type { Improvement, ImprovementZone } from '@/lib/types'
+import type { Improvement, ImprovementZone, ImprovementKind } from '@/lib/types'
 
 export async function getAll(site_id: string): Promise<Improvement[]> {
   const { data, error } = await supabase
@@ -11,7 +11,7 @@ export async function getAll(site_id: string): Promise<Improvement[]> {
   return data as Improvement[]
 }
 
-export async function create(data: { site_id: string; zone: ImprovementZone; description: string; comment?: string }): Promise<Improvement> {
+export async function create(data: { site_id: string; zone: ImprovementZone; kind: ImprovementKind; description: string; comment?: string }): Promise<Improvement> {
   const { data: result, error } = await supabase.from('improvements').insert(data).select().single()
   if (error) throw error
   return result as Improvement

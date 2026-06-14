@@ -44,11 +44,13 @@ export type IncidentStatus = 'declared' | 'analysed' | 'action_ongoing' | 'verif
 export type IncidentZone = 'bar' | 'caisse' | 'arcades' | 'parc' | 'laser_game' | 'annivs'
 
 export type ImprovementZone = 'parc' | 'anniv' | 'bar' | 'caisse'
+export type ImprovementKind = 'positive' | 'improvement'
 
 export interface Improvement {
   id: string
   site_id: string
   zone: ImprovementZone
+  kind: ImprovementKind
   description: string
   comment: string
   done: boolean
