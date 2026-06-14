@@ -17,9 +17,9 @@ import type { Improvement, ImprovementKind, BrainstormEntry, BrainstormCategory 
 const SITE_ID = '00000000-0000-0000-0000-000000000001'
 const ZONE = 'anniv' as const
 
-const kindConfig: Record<ImprovementKind, { label: string; icon: typeof ThumbsUp; activeBtn: string; bar: string }> = {
-  positive:    { label: "Point positif",    icon: ThumbsUp, activeBtn: "bg-green-600 text-white hover:bg-green-500",  bar: "border-l-green-500" },
-  improvement: { label: "Point à améliorer", icon: Wrench,   activeBtn: "bg-amber-600 text-white hover:bg-amber-500", bar: "border-l-amber-500" },
+const kindConfig: Record<ImprovementKind, { label: string; icon: typeof ThumbsUp; activeBtn: string; bar: string; header: string; ring: string }> = {
+  positive:    { label: "Point positif",    icon: ThumbsUp, activeBtn: "bg-green-600 text-white hover:bg-green-500",  bar: "border-l-green-500", header: "from-green-500/20 to-emerald-500/5 border-green-500/40", ring: "text-green-400" },
+  improvement: { label: "Point à améliorer", icon: Wrench,   activeBtn: "bg-amber-600 text-white hover:bg-amber-500", bar: "border-l-amber-500", header: "from-amber-500/20 to-orange-500/5 border-amber-500/40", ring: "text-amber-400" },
 }
 
 const CATEGORY_LABEL: Record<BrainstormCategory, string> = {
@@ -172,17 +172,17 @@ export default function AmeliorationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between bg-gradient-to-r from-pink-600 via-fuchsia-600 to-purple-600 rounded-2xl p-5 shadow-lg shadow-fuchsia-900/30">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Cake className="w-6 h-6 text-pink-400" />
+            <Cake className="w-7 h-7" />
             Anniversaire
           </h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <p className="text-pink-100 text-sm mt-1">
             Points à améliorer pour le week-end prochain
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+        <Button variant="outline" size="sm" onClick={load} disabled={loading} className="bg-white/10 border-white/30 text-white hover:bg-white/20 hover:text-white">
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
           Actualiser
         </Button>
@@ -193,10 +193,11 @@ export default function AmeliorationsPage() {
           const Icon = cfg.icon
           const kindItems = zoneItems.filter(i => i.kind === k)
           return (
-            <div key={k} className={`bg-slate-800 border border-slate-700 border-t-4 ${cfg.bar.replace("border-l-", "border-t-")} rounded-xl p-4`}>
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 uppercase tracking-widest mb-3">
-                <Icon className="w-3.5 h-3.5" />
+            <div key={k} className={`bg-gradient-to-b ${cfg.header} border-2 rounded-2xl p-4 shadow-lg`}>
+              <div className={`flex items-center gap-2 text-sm font-bold ${cfg.ring} uppercase tracking-widest mb-3`}>
+                <Icon className="w-5 h-5" />
                 {cfg.label}{kindItems.length > 1 ? "s" : ""}
+                <span className="ml-auto bg-slate-900/40 text-white text-xs rounded-full px-2 py-0.5">{kindItems.length}</span>
               </div>
 
               <div className="flex items-center gap-1.5 mb-3">
@@ -271,7 +272,7 @@ export default function AmeliorationsPage() {
               ) : (
                 <ul className="space-y-2">
                   {kindItems.map(item => (
-                    <li key={item.id} className={`bg-slate-900/50 border border-slate-700 border-l-4 ${cfg.bar} rounded-lg p-3`}>
+                    <li key={item.id} className={`bg-slate-900/60 border border-slate-700/60 border-l-4 ${cfg.bar} rounded-lg p-3 shadow-sm`}>
                       <div className="flex items-start gap-3">
                         <button
                           onClick={() => toggleDone(item)}
@@ -340,10 +341,10 @@ export default function AmeliorationsPage() {
         })}
       </div>
 
-      <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-4">
+      <div className="bg-gradient-to-br from-indigo-500/15 via-slate-800 to-purple-500/15 border-2 border-indigo-500/40 rounded-2xl p-4 space-y-4 shadow-lg">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300 uppercase tracking-widest">
-            <QrCode className="w-3.5 h-3.5" />
+          <div className="flex items-center gap-2 text-sm font-bold text-indigo-300 uppercase tracking-widest">
+            <QrCode className="w-5 h-5" />
             Brainstorming réunion d'équipe
           </div>
           <div className="flex items-center gap-2">
@@ -383,8 +384,8 @@ export default function AmeliorationsPage() {
 
       {anniversaryReviews.length > 0 && (
         <div>
-          <h2 className="text-base font-semibold text-white flex items-center gap-2 mb-4">
-            <Star className="w-4 h-4 text-pink-400 fill-pink-400" />
+          <h2 className="text-base font-bold text-white flex items-center gap-2 mb-4">
+            <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
             Avis clients — réservations Anniversaire ({anniversaryReviews.length})
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
