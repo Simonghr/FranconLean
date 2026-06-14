@@ -40,13 +40,23 @@ export async function getSettings(site_id: string): Promise<BrainstormSettings> 
     .eq('site_id', site_id)
     .maybeSingle()
   if (error) throw error
-  return (data as BrainstormSettings) ?? { site_id, is_open: true }
+  return (data as BrainstormSettings) ?? { site_id, is_open: true, session_id: '' }
 }
 
 export async function setOpen(site_id: string, is_open: boolean): Promise<BrainstormSettings> {
   const { data, error } = await supabase
     .from('brainstorm_settings')
     .upsert({ site_id, is_open })
+    .select()
+    .single()
+  if (error) throw error
+  return data as BrainstormSettings
+}
+
+export async function newSession(site_id: string): Promise<BrainstormSettings> {
+  const { data, error } = await supabase
+    .from('brainstorm_settings')
+    .upsert({ site_id, is_open: true, session_id: crypto.randomUUID() })
     .select()
     .single()
   if (error) throw error

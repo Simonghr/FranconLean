@@ -44,6 +44,7 @@ export default function AmeliorationsPage() {
   const [newItems, setNewItems] = useState<Record<ImprovementKind, string>>({ positive: "", improvement: "" })
   const [qrExpanded, setQrExpanded] = useState(false)
   const [brainstormOpen, setBrainstormOpen] = useState(true)
+  const [brainstormSessionId, setBrainstormSessionId] = useState("")
   const [editingEntry, setEditingEntry] = useState<string | null>(null)
   const [editDraft, setEditDraft] = useState("")
   const [newKeyword, setNewKeyword] = useState<Record<string, string>>({})
@@ -65,6 +66,7 @@ export default function AmeliorationsPage() {
       setAnniversaryReviews(reviews.filter(r => r.booking_reference && refs.has(r.booking_reference)))
       setBrainstormEntries(brainstorm)
       setBrainstormOpen(settings.is_open)
+      setBrainstormSessionId(settings.session_id)
     } finally {
       setLoading(false)
     }
@@ -101,16 +103,20 @@ export default function AmeliorationsPage() {
   }
 
   const resetBrainstorm = async () => {
-    if (!window.confirm("Réinitialiser toutes les réponses du brainstorming ?")) return
+    if (!window.confirm("Réinitialiser toutes les réponses et générer un nouveau QR code ?")) return
     await brainstormRepo.removeAll(SITE_ID)
     setBrainstormEntries([])
+    const updated = await brainstormRepo.newSession(SITE_ID)
+    setBrainstormOpen(updated.is_open)
+    setBrainstormSessionId(updated.session_id)
   }
 
   useEffect(() => { load() }, [])
 
   useEffect(() => {
-    setBrainstormUrl(`${window.location.origin}/brainstorm`)
-  }, [])
+    if (!brainstormSessionId) return
+    setBrainstormUrl(`${window.location.origin}/brainstorm?s=${brainstormSessionId}`)
+  }, [brainstormSessionId])
 
   useEffect(() => {
     const channel = supabase

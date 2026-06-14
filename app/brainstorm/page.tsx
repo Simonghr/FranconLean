@@ -97,7 +97,10 @@ export default function BrainstormPage() {
   const [isOpen, setIsOpen] = useState<boolean | null>(null)
 
   useEffect(() => {
-    brainstormRepo.getSettings(SITE_ID).then(s => setIsOpen(s.is_open))
+    brainstormRepo.getSettings(SITE_ID).then(s => {
+      const sessionParam = new URLSearchParams(window.location.search).get('s')
+      setIsOpen(s.is_open && (!s.session_id || sessionParam === s.session_id))
+    })
   }, [])
 
   const handleSubmit = async (category: BrainstormCategory, sentiment: BrainstormSentiment, keyword: string) => {
