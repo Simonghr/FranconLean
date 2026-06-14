@@ -27,7 +27,7 @@ export async function removeAll(site_id: string): Promise<void> {
   if (error) throw error
 }
 
-export async function update(id: string, data: { keyword: string }): Promise<BrainstormEntry> {
+export async function update(id: string, data: Partial<Pick<BrainstormEntry, 'keyword' | 'sentiment' | 'category'>>): Promise<BrainstormEntry> {
   const { data: result, error } = await supabase.from('brainstorm_entries').update(data).eq('id', id).select().single()
   if (error) throw error
   return result as BrainstormEntry

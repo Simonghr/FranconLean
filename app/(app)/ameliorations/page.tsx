@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Plus, Trash2, RefreshCw, Cake, MessageSquare, Calendar, ThumbsUp, ThumbsDown, Wrench, Star, QrCode } from "lucide-react"
+import { Plus, Trash2, RefreshCw, Cake, MessageSquare, Calendar, ThumbsUp, ThumbsDown, Wrench, Star, QrCode, ArrowLeftRight } from "lucide-react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
 import { Button } from "@/components/ui/button"
@@ -93,6 +93,12 @@ export default function AmeliorationsPage() {
   const deleteEntry = async (id: string) => {
     await brainstormRepo.remove(id)
     setBrainstormEntries(prev => prev.filter(e => e.id !== id))
+  }
+
+  const moveEntry = async (entry: BrainstormEntry) => {
+    const sentiment = entry.sentiment === 'positive' ? 'negative' : 'positive'
+    const updated = await brainstormRepo.update(entry.id, { sentiment })
+    setBrainstormEntries(prev => prev.map(e => e.id === entry.id ? updated : e))
   }
 
   const addEntry = async (category: BrainstormCategory, sentiment: "positive" | "negative", keyword: string) => {
@@ -237,6 +243,9 @@ export default function AmeliorationsPage() {
                         }`}>
                           <span className="text-slate-500">{CATEGORY_LABEL[e.category]}:</span>
                           <button onClick={() => startEditEntry(e)} className="hover:underline">{e.keyword}</button>
+                          <button onClick={() => moveEntry(e)} className="opacity-40 hover:opacity-100" title={sentiment === "positive" ? "Déplacer vers À améliorer" : "Déplacer vers Positif"}>
+                            <ArrowLeftRight className="w-3 h-3" />
+                          </button>
                           <button onClick={() => deleteEntry(e.id)} className="opacity-40 hover:opacity-100">×</button>
                         </span>
                       )
