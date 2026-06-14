@@ -101,6 +101,19 @@ export default function AmeliorationsPage() {
     setBrainstormEntries(prev => prev.map(e => e.id === entry.id ? updated : e))
   }
 
+  const reorderEntry = (draggedId: string, targetId: string) => {
+    if (draggedId === targetId) return
+    setBrainstormEntries(prev => {
+      const fromIndex = prev.findIndex(e => e.id === draggedId)
+      const toIndex = prev.findIndex(e => e.id === targetId)
+      if (fromIndex === -1 || toIndex === -1) return prev
+      const next = [...prev]
+      const [moved] = next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, moved)
+      return next
+    })
+  }
+
   const addEntry = async (category: BrainstormCategory, sentiment: "positive" | "negative", keyword: string) => {
     const kw = keyword.trim()
     if (!kw) return
@@ -238,7 +251,13 @@ export default function AmeliorationsPage() {
                           <button onClick={() => setEditingEntry(null)} className="text-[11px] text-slate-500 hover:text-slate-400">✕</button>
                         </span>
                       ) : (
-                        <span key={e.id} className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border ${
+                        <span
+                          key={e.id}
+                          draggable
+                          onDragStart={ev => ev.dataTransfer.setData("text/plain", e.id)}
+                          onDragOver={ev => ev.preventDefault()}
+                          onDrop={ev => { ev.preventDefault(); reorderEntry(ev.dataTransfer.getData("text/plain"), e.id) }}
+                          className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border cursor-move ${
                           sentiment === "positive" ? "bg-green-500/10 text-green-400 border-green-500/30" : "bg-amber-500/10 text-amber-400 border-amber-500/30"
                         }`}>
                           <span className="text-slate-500">{CATEGORY_LABEL[e.category]}:</span>
