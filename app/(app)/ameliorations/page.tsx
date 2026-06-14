@@ -57,6 +57,7 @@ export default function AmeliorationsPage() {
   const [brainstormUrl, setBrainstormUrl] = useState("")
   const [loading, setLoading] = useState(true)
   const [newItems, setNewItems] = useState<Record<ImprovementKind, string>>({ positive: "", improvement: "" })
+  const [qrExpanded, setQrExpanded] = useState(false)
   const [openComment, setOpenComment] = useState<string | null>(null)
   const [commentDraft, setCommentDraft] = useState("")
 
@@ -251,14 +252,19 @@ export default function AmeliorationsPage() {
         </div>
         <div className="flex flex-col sm:flex-row gap-6 items-start">
           {brainstormUrl && (
-            <div className="bg-white p-2 rounded-lg flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setQrExpanded(true)}
+              className="bg-white p-2 rounded-lg flex-shrink-0 hover:opacity-90 transition-opacity"
+              title="Agrandir le QR code"
+            >
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(brainstormUrl)}`}
                 alt="QR code brainstorming"
                 width={180}
                 height={180}
               />
-            </div>
+            </button>
           )}
           <div className="flex-1 w-full space-y-4">
             {BRAINSTORM_GROUPS.map(group => (
@@ -343,6 +349,23 @@ export default function AmeliorationsPage() {
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {qrExpanded && brainstormUrl && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-6"
+          onClick={() => setQrExpanded(false)}
+        >
+          <div className="bg-white p-6 rounded-2xl">
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=${encodeURIComponent(brainstormUrl)}`}
+              alt="QR code brainstorming"
+              width={500}
+              height={500}
+              className="max-w-full max-h-[80vh]"
+            />
           </div>
         </div>
       )}
