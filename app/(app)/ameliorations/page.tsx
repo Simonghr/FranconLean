@@ -46,7 +46,7 @@ export default function AmeliorationsPage() {
     setLoading(true)
     try {
       const data = await improvementsRepo.getAll(SITE_ID)
-      setItems(data)
+      setItems(data.map(i => ({ ...i, kind: i.kind ?? 'improvement' })))
     } finally {
       setLoading(false)
     }
@@ -60,13 +60,13 @@ export default function AmeliorationsPage() {
     const description = newItem.trim()
     if (!description) return
     const created = await improvementsRepo.create({ site_id: SITE_ID, zone, kind: newKind, description })
-    setItems(prev => [created, ...prev])
+    setItems(prev => [{ ...created, kind: created.kind ?? newKind }, ...prev])
     setNewItem("")
   }
 
   const toggleDone = async (item: Improvement) => {
     const updated = await improvementsRepo.update(item.id, { done: !item.done })
-    setItems(prev => prev.map(i => i.id === item.id ? updated : i))
+    setItems(prev => prev.map(i => i.id === item.id ? { ...updated, kind: updated.kind ?? item.kind } : i))
   }
 
   const handleDelete = async (id: string) => {
@@ -81,7 +81,7 @@ export default function AmeliorationsPage() {
 
   const saveComment = async (item: Improvement) => {
     const updated = await improvementsRepo.update(item.id, { comment: commentDraft })
-    setItems(prev => prev.map(i => i.id === item.id ? updated : i))
+    setItems(prev => prev.map(i => i.id === item.id ? { ...updated, kind: updated.kind ?? item.kind } : i))
     setOpenComment(null)
   }
 
