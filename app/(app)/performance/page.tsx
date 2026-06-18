@@ -1,12 +1,14 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip
 } from "recharts"
 import { format, startOfWeek, startOfMonth } from "date-fns"
 import { fr } from "date-fns/locale"
-import { TrendingUp, TrendingDown, Target, Euro } from "lucide-react"
+import { TrendingUp, TrendingDown, Target, Euro, Upload, Loader2, Check } from "lucide-react"
 import * as salesRepo from "@/lib/repositories/sales"
+import * as budgetsRepo from "@/lib/repositories/budgets"
+import { parseBudgetWorkbook } from "@/lib/budgetExcel"
 import type { Sale } from "@/lib/types"
 
 const SITE_ID = '00000000-0000-0000-0000-000000000001'
@@ -58,13 +60,35 @@ export default function PerformancePage() {
   const [period, setPeriod] = useState<Period>("month")
   const [sales, setSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
+  const [importing, setImporting] = useState(false)
+  const [imported, setImported] = useState<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const loadSales = () => salesRepo.getAll(SITE_ID).then(setSales).catch(console.error)
 
   useEffect(() => {
-    salesRepo.getAll(SITE_ID)
-      .then(setSales)
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    loadSales().finally(() => setLoading(false))
   }, [])
+
+  const handleImportBudget = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (!file) return
+    setImporting(true)
+    setImported(null)
+    try {
+      const entries = await parseBudgetWorkbook(file, SITE_ID)
+      await budgetsRepo.upsertMany(entries)
+      await budgetsRepo.syncSalesTargets(SITE_ID, entries)
+      await loadSales()
+      setImported(entries.length)
+    } catch (err) {
+      console.error(err)
+      alert("Erreur lors de l'import du budget. Vérifiez le format du fichier.")
+    } finally {
+      setImporting(false)
+    }
+  }
 
   const { start, end } = getDateRange(period)
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" })
@@ -164,7 +188,31 @@ export default function PerformancePage() {
 
       {/* Main chart */}
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
-        <h3 className="font-semibold text-white mb-4">CA vs Objectif — {periodLabel}</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-semibold text-white">CA vs Objectif — {periodLabel}</h3>
+          <div className="flex items-center gap-2">
+            {imported != null && (
+              <span className="text-xs text-green-400 flex items-center gap-1">
+                <Check className="w-3.5 h-3.5" /> {imported} jours importés
+              </span>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={handleImportBudget}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors disabled:opacity-50"
+            >
+              {importing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              {importing ? "Import en cours…" : "Importer budget (Excel)"}
+            </button>
+          </div>
+        </div>
         {data.length === 0
           ? <div className="text-center text-slate-500 py-12">Aucune donnée pour cette période</div>
           : <ResponsiveContainer width="100%" height={320}>
