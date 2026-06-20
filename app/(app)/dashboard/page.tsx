@@ -92,12 +92,12 @@ export default function DashboardPage() {
         setGxError(err instanceof Error ? err.message : String(err))
       }
 
-      // Anniversaires next weekend
+      // Anniversaires this/next weekend (current weekend if today is Sat/Sun, else upcoming one)
       try {
         const todayParis = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" })
         const today = new Date(todayParis + "T12:00:00")
         const dow = today.getDay() // 0=Sun, 6=Sat
-        const daysToSat = dow === 6 ? 7 : (6 - dow + 7) % 7 || 7
+        const daysToSat = dow === 6 ? 0 : dow === 0 ? -1 : 6 - dow
         const sat = new Date(today); sat.setDate(today.getDate() + daysToSat)
         const sun = new Date(sat); sun.setDate(sat.getDate() + 1)
         const satStr = sat.toLocaleDateString("en-CA")
@@ -136,13 +136,14 @@ export default function DashboardPage() {
 const gxCalc = (fans: number, critics: number, total: number) =>
   total ? Math.round(fans / total * 100) - Math.round(critics / total * 100) : 0
 
-  // GX Score — last weekend (most recent Saturday + Sunday)
+  // GX Score — this weekend if today is Sat/Sun, else the most recently completed one
   const lastWeekendScore = (() => {
     if (!gxScores.length) return null
     const today = new Date()
     const dow = today.getDay() // 0=Sun,1=Mon,...,6=Sat
-    const lastSun = new Date(today); lastSun.setDate(today.getDate() - (dow === 0 ? 7 : dow))
-    const lastSat = new Date(lastSun); lastSat.setDate(lastSun.getDate() - 1)
+    const satOffset = dow === 6 ? 0 : dow === 0 ? -1 : -(dow + 1)
+    const lastSat = new Date(today); lastSat.setDate(today.getDate() + satOffset)
+    const lastSun = new Date(lastSat); lastSun.setDate(lastSat.getDate() + 1)
     const satStr = lastSat.toISOString().split("T")[0]
     const sunStr = lastSun.toISOString().split("T")[0]
     const days = gxScores.filter(g => g.date === satStr || g.date === sunStr)
