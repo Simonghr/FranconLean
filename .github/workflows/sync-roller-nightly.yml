@@ -2,9 +2,10 @@ name: Sync Roller Revenue
 
 on:
   schedule:
-    # Every hour — keeps today's CA up to date throughout the day, and
-    # keeps the last 7 days refreshed as Roller's revenue figures settle.
-    - cron: "0 * * * *"
+    # Every hour between 11h and 21h (Europe/Paris) — covers opening hours
+    # and saves compute outside them. UTC window is widened to 9-20 to cover
+    # both CET/CEST; the job itself skips the run if outside local 11-21.
+    - cron: "0 9-20 * * *"
   workflow_dispatch:
     inputs:
       days:
@@ -16,7 +17,17 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
+      - name: Skip outside 11h-21h Paris time (scheduled runs only)
+        if: github.event_name == 'schedule'
+        run: |
+          PARIS_HOUR=$(TZ="Europe/Paris" date +%H)
+          echo "Current Paris hour: $PARIS_HOUR"
+          if [ "$PARIS_HOUR" -lt 11 ] || [ "$PARIS_HOUR" -gt 21 ]; then
+            echo "Outside 11h-21h Paris window, skipping sync."
+            echo "SKIP=true" >> "$GITHUB_ENV"
+          fi
       - name: Call rapid-processor Edge Function (chunked by 10 days)
+        if: env.SKIP != 'true'
         run: |
           DAYS="${{ github.event.inputs.days || '7' }}"
           BASE="${{ secrets.SUPABASE_URL }}"
