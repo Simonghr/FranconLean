@@ -74,3 +74,35 @@ jobs:
           printf "TOTAL CA synced: %.2f EUR\n" "$GRAND_TOTAL"
           [ "$FAILED" = "0" ] || { echo "::error::one or more chunks failed"; exit 1; }
           echo "Sync OK"
+
+      - name: Reapply Budget Prévisionnel targets (rapid-processor overwrites them with a flat fallback)
+        if: env.SKIP != 'true'
+        run: |
+          DAYS="${{ github.event.inputs.days || '7' }}"
+          BASE="${{ secrets.SUPABASE_URL }}"
+          BASE="${BASE%/}"
+          SITE_ID="00000000-0000-0000-0000-000000000001"
+          ANON="${{ secrets.SUPABASE_ANON_KEY }}"
+
+          END=$(date -u +%F)
+          START=$(date -u -d "$END - $((DAYS - 1)) days" +%F)
+          cur="$START"
+
+          while [ "$cur" \< "$END" ] || [ "$cur" = "$END" ]; do
+            TARGET=$(curl -s \
+              "$BASE/rest/v1/budgets?site_id=eq.$SITE_ID&date=eq.$cur&select=target" \
+              -H "apikey: $ANON" -H "Authorization: Bearer $ANON" \
+              | jq -r '.[0].target // empty')
+
+            if [ -n "$TARGET" ]; then
+              curl -s -o /dev/null -w "  $cur -> target $TARGET (HTTP %{http_code})\n" -X PATCH \
+                "$BASE/rest/v1/sales?site_id=eq.$SITE_ID&date=eq.$cur&period=eq.day" \
+                -H "apikey: $ANON" -H "Authorization: Bearer $ANON" \
+                -H "Content-Type: application/json" -H "Prefer: return=minimal" \
+                -d "{\"target\": $TARGET}"
+            else
+              echo "  $cur -> no budget row, skipping"
+            fi
+
+            cur=$(date -u -d "$cur + 1 day" +%F)
+          done
