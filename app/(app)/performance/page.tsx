@@ -10,8 +10,7 @@ import * as salesRepo from "@/lib/repositories/sales"
 import * as budgetsRepo from "@/lib/repositories/budgets"
 import { parseBudgetWorkbook } from "@/lib/budgetExcel"
 import type { Sale } from "@/lib/types"
-
-const SITE_ID = '00000000-0000-0000-0000-000000000001'
+import { useSite } from "@/lib/context/SiteContext"
 
 type Period = "day" | "week" | "month"
 
@@ -57,6 +56,7 @@ function getDateRange(period: Period): { start: string; end: string } {
 }
 
 export default function PerformancePage() {
+  const { siteId: SITE_ID } = useSite()
   const [period, setPeriod] = useState<Period>("month")
   const [sales, setSales] = useState<Sale[]>([])
   const [loading, setLoading] = useState(true)
@@ -67,8 +67,10 @@ export default function PerformancePage() {
   const loadSales = () => salesRepo.getAll(SITE_ID).then(setSales).catch(console.error)
 
   useEffect(() => {
+    setLoading(true)
     loadSales().finally(() => setLoading(false))
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [SITE_ID])
 
   const handleImportBudget = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
