@@ -10,8 +10,7 @@ import * as pdcaRepo from "@/lib/repositories/pdca"
 import type { PDCA, PDCAStatus } from "@/lib/types"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
-
-const SITE_ID = '00000000-0000-0000-0000-000000000001'
+import { useSite } from "@/lib/context/SiteContext"
 
 const statusConfig: Record<PDCAStatus, { label: string; color: string; bg: string; border: string }> = {
   plan: { label: "PLAN", color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/30" },
@@ -78,17 +77,19 @@ function PDCACard({ pdca, onAdvance }: { pdca: PDCA; onAdvance: (pdca: PDCA) => 
 }
 
 export default function PDCAPage() {
+  const { siteId: SITE_ID } = useSite()
   const [pdcas, setPdcas] = useState<PDCA[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState({ problem: "", objective: "", action: "" })
 
   useEffect(() => {
+    setLoading(true)
     pdcaRepo.getAll(SITE_ID)
       .then(setPdcas)
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
+  }, [SITE_ID])
 
   const handleAdd = async () => {
     if (!form.problem || !form.objective || !form.action) return

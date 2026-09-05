@@ -10,8 +10,7 @@ import * as kaizenRepo from "@/lib/repositories/kaizen"
 import * as gxRepo from "@/lib/repositories/gx"
 import { generateInsights } from "@/lib/services/insightsService"
 import type { Incident, Sale, CustomerFeedback, Kaizen, Insight, GxScore } from "@/lib/types"
-
-const SITE_ID = '00000000-0000-0000-0000-000000000001'
+import { useSite } from "@/lib/context/SiteContext"
 
 const insightConfig = {
   warning: { icon: AlertTriangle, color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20", label: "Alerte" },
@@ -87,6 +86,7 @@ const ballePrinciples = [
 ]
 
 export default function IntelligencePage() {
+  const { siteId: SITE_ID } = useSite()
   const [insights, setInsights] = useState<Insight[]>([])
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [sales, setSales] = useState<Sale[]>([])
@@ -116,7 +116,8 @@ export default function IntelligencePage() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load() }, [SITE_ID])
 
   // Compute trend stats (last 14 days vs previous 14 days)
   const now = new Date()
