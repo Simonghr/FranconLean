@@ -11,8 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import * as kaizenRepo from "@/lib/repositories/kaizen"
 import type { Kaizen, KaizenStatus } from "@/lib/types"
-
-const SITE_ID = '00000000-0000-0000-0000-000000000001'
+import { useSite } from "@/lib/context/SiteContext"
 
 const statusConfig: Record<KaizenStatus, { label: string; variant: "default" | "warning" | "success" | "destructive" | "info" }> = {
   idea: { label: "Idée", variant: "info" },
@@ -59,17 +58,19 @@ function KaizenCard({ kaizen }: { kaizen: Kaizen }) {
 }
 
 export default function KaizenPage() {
+  const { siteId: SITE_ID } = useSite()
   const [kaizenList, setKaizenList] = useState<Kaizen[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [form, setForm] = useState({ description: "", benefits: "", estimated_cost: "", author: "" })
 
   useEffect(() => {
+    setLoading(true)
     kaizenRepo.getAll(SITE_ID)
       .then(setKaizenList)
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
+  }, [SITE_ID])
 
   const handleAdd = async () => {
     if (!form.description || !form.author) return
