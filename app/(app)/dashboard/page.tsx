@@ -26,13 +26,11 @@ import type { GxReview } from "@/lib/repositories/gxReviews"
 import { translateTag } from "@/lib/gxTagTranslations"
 import { generateInsights } from "@/lib/services/insightsService"
 import { seedDatabase } from "@/lib/seed"
+import { useSite } from "@/lib/context/SiteContext"
 import type { Incident, Sale, GxScore, CustomerFeedback, Insight, IncidentCategory, IncidentImpact, IncidentZone, IncidentType } from "@/lib/types"
 
-const SITE_ID = '00000000-0000-0000-0000-000000000001'
-
-const mockSite = { id: SITE_ID, name: 'Franconville', address: '12 Rue du Commerce, 95130 Franconville', manager_name: 'Simon Gohier' }
-
 export default function DashboardPage() {
+  const { siteId: SITE_ID, currentSite } = useSite()
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [sales, setSales] = useState<Sale[]>([])
   const [gxScores, setGxScores] = useState<GxScore[]>([])
@@ -122,8 +120,9 @@ export default function DashboardPage() {
         console.error('Failed to load anniversaires', e)
       }
     }
+    setLoading(true)
     load()
-  }, [])
+  }, [SITE_ID])
 
   const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" })
   const todaySale = sales.find(s => s.date === todayStr)
@@ -171,7 +170,7 @@ const gxCalc = (fans: number, critics: number, total: number) =>
     return total ? gxCalc(fans, critics, total) : null
   })()
 
-  // ── GX tag synthesis ──────────────────────────────────────────────────────
+  // ── GX tag synthesis ─────────────────────────────────────
   const tagSynthesis = (() => {
     const fanTags: Record<string, number> = {}
     const criticTags: Record<string, number> = {}
@@ -243,7 +242,7 @@ const gxCalc = (fans: number, critics: number, total: number) =>
   return (
     <div className="space-y-6 max-w-[1400px]">
       {/* Briefing Header */}
-      <BriefingHeader briefing={mockBriefing} siteName={mockSite.name} />
+      <BriefingHeader briefing={mockBriefing} siteName={currentSite?.name ?? ""} />
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
