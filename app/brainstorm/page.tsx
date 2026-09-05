@@ -4,7 +4,7 @@ import { ThumbsUp, ThumbsDown, CheckCircle2, Sparkles, Lock } from "lucide-react
 import * as brainstormRepo from "@/lib/repositories/brainstorm"
 import type { BrainstormCategory, BrainstormSentiment } from "@/lib/types"
 
-const SITE_ID = '00000000-0000-0000-0000-000000000001'
+const DEFAULT_SITE_ID = '00000000-0000-0000-0000-000000000001'
 
 const GROUPS: { title: string; categories: { id: BrainstormCategory; label: string }[] }[] = [
   {
@@ -95,16 +95,20 @@ function KeywordField({
 
 export default function BrainstormPage() {
   const [isOpen, setIsOpen] = useState<boolean | null>(null)
+  const [siteId, setSiteId] = useState(DEFAULT_SITE_ID)
 
   useEffect(() => {
-    brainstormRepo.getSettings(SITE_ID).then(s => {
-      const sessionParam = new URLSearchParams(window.location.search).get('s')
+    const params = new URLSearchParams(window.location.search)
+    const site = params.get('site') || DEFAULT_SITE_ID
+    setSiteId(site)
+    brainstormRepo.getSettings(site).then(s => {
+      const sessionParam = params.get('s')
       setIsOpen(s.is_open && (!s.session_id || sessionParam === s.session_id))
     })
   }, [])
 
   const handleSubmit = async (category: BrainstormCategory, sentiment: BrainstormSentiment, keyword: string) => {
-    await brainstormRepo.create({ site_id: SITE_ID, category, sentiment, keyword })
+    await brainstormRepo.create({ site_id: siteId, category, sentiment, keyword })
   }
 
   if (isOpen === false) {
