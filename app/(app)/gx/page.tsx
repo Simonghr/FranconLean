@@ -17,8 +17,8 @@ import * as gxReviewsRepo from "@/lib/repositories/gxReviews"
 import type { GxReview } from "@/lib/repositories/gxReviews"
 import { translateTag } from "@/lib/gxTagTranslations"
 import type { CustomerFeedback, FeedbackCategory, FeedbackSentiment, GxScore } from "@/lib/types"
+import { useSite } from "@/lib/context/SiteContext"
 
-const SITE_ID = '00000000-0000-0000-0000-000000000001'
 
 const gxCalc = (fans: number, critics: number, total: number) =>
   total ? Math.round(fans / total * 100) - Math.round(critics / total * 100) : 0
@@ -51,6 +51,7 @@ const sentimentLabels: Record<FeedbackSentiment, string> = {
 }
 
 export default function GxScorePage() {
+  const { siteId: SITE_ID } = useSite()
   const [feedbacks, setFeedbacks] = useState<CustomerFeedback[]>([])
   const [gxScores, setGxScores] = useState<GxScore[]>([])
   const [reviews, setReviews] = useState<GxReview[]>([])
@@ -76,9 +77,9 @@ export default function GxScorePage() {
       .then(([fb, gx, rev]) => { setFeedbacks(fb); setGxScores(gx); setReviews(rev) })
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
+  }, [SITE_ID])
 
-  // ── GX KPIs ────────────────────────────────────────────────────────────────
+  // ── GX KPIs ─────────────────────────────────────────────
   const last30Score = (() => {
     if (!gxScores.length) return null
     const sorted = [...gxScores].sort((a, b) => b.date.localeCompare(a.date))
@@ -159,7 +160,7 @@ export default function GxScorePage() {
     ? Math.round(last30Score.critics / last30Score.total * 100)
     : null
 
-  // ── Period filter for reviews ─────────────────────────────────────────────
+  // ── Period filter for reviews ────────────────────────────────
   const filteredReviews = (() => {
     if (periodReviews === "day") {
       return reviews.filter(r => r.date === selectedDate)
@@ -178,7 +179,7 @@ export default function GxScorePage() {
     }
   })()
 
-  // ── Tag synthesis ─────────────────────────────────────────────────────────
+  // ── Tag synthesis ──────────────────────────────────────
   const tagSynthesis = (() => {
     const fanTags: Record<string, number> = {}
     const criticTags: Record<string, number> = {}
