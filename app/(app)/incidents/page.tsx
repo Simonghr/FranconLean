@@ -13,10 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import * as incidentsRepo from "@/lib/repositories/incidents"
 import type { Incident, IncidentStatus, IncidentCategory, IncidentImpact, IncidentZone, IncidentType, IncidentUrgency } from "@/lib/types"
-
-const SITE_ID = '00000000-0000-0000-0000-000000000001'
-
-// ── Workflow ────────────────────────────────────────────────────────────────
+import { useSite } from "@/lib/context/SiteContext"
 
 const WORKFLOW: IncidentStatus[] = [
   'declared', 'analysed', 'action_ongoing', 'verified', 'standardised', 'closed'
@@ -51,8 +48,6 @@ const nextActionLabel: Record<IncidentStatus, string | null> = {
   closed:         null,
 }
 
-// ── Reference data ──────────────────────────────────────────────────────────
-
 const zoneLabels: Record<IncidentZone, string> = {
   bar: "Bar", caisse: "Caisse", arcades: "Arcades",
   parc: "Parc", laser_game: "Laser Game", annivs: "Annivs",
@@ -73,8 +68,6 @@ const urgencyConfig: Record<IncidentUrgency, { label: string; color: string; bg:
   medium:        { label: "Moyen",                   color: "text-yellow-400", bg: "bg-yellow-500/10", dot: "bg-yellow-400" },
   client_impact: { label: "Expérience client impactée", color: "text-red-400", bg: "bg-red-500/10",    dot: "bg-red-400" },
 }
-
-// ── Blank form ───────────────────────────────────────────────────────────────
 
 const nowParis = () => {
   const now = new Date()
@@ -98,8 +91,6 @@ const blankForm = (): FormState => {
   const { date, time } = nowParis()
   return { description: "", incident_type: "technique", zone: "parc", date, time, owner: "", urgency: "low" }
 }
-
-// ── Incident form (shared by Create + Edit) ──────────────────────────────────
 
 function IncidentForm({ form, onChange }: { form: FormState; onChange: (f: FormState) => void }) {
   const set = (k: keyof FormState) => (v: string) => onChange({ ...form, [k]: v })
@@ -170,10 +161,9 @@ function IncidentForm({ form, onChange }: { form: FormState; onChange: (f: FormS
   )
 }
 
-// ── Main page ────────────────────────────────────────────────────────────────
-
 export default function IncidentsPage() {
   const router = useRouter()
+  const { siteId: SITE_ID } = useSite()
   const [incidents, setIncidents] = useState<Incident[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -188,13 +178,12 @@ export default function IncidentsPage() {
   const [editForm, setEditForm] = useState<FormState>(blankForm)
 
   useEffect(() => {
+    setLoading(true)
     incidentsRepo.getAll(SITE_ID)
       .then(setIncidents)
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  }, [SITE_ID])
 
   const formToPayload = (f: FormState) => ({
     occurred_at: new Date(`${f.date}T${f.time}:00`).toISOString(),
@@ -284,16 +273,12 @@ export default function IncidentsPage() {
     } catch (err) { console.error(err) }
   }
 
-  // ── Counts ─────────────────────────────────────────────────────────────────
-
   const counts = WORKFLOW.reduce((acc, s) => {
     acc[s] = incidents.filter(i => i.status === s).length
     return acc
   }, {} as Record<IncidentStatus, number>)
 
   const activeCount = incidents.filter(i => i.status !== 'closed').length
-
-  // ── Filtering ──────────────────────────────────────────────────────────────
 
   const filtered = incidents.filter(inc => {
     const matchSearch = inc.description.toLowerCase().includes(search.toLowerCase()) ||
@@ -390,14 +375,12 @@ export default function IncidentsPage() {
                 const occurred = inc.occurred_at ?? inc.created_at
                 return (
                   <tr key={inc.id} className="border-b border-slate-700/40 hover:bg-slate-700/20 transition-colors">
-                    {/* Date */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-1.5 text-slate-300 text-xs">
                         <Clock className="w-3.5 h-3.5 text-slate-500" />
                         {format(new Date(occurred), "dd/MM HH:mm", { locale: fr })}
                       </div>
                     </td>
-                    {/* Zone */}
                     <td className="px-4 py-3">
                       {inc.zone ? (
                         <div className="flex items-center gap-1.5 text-xs text-slate-300">
@@ -406,7 +389,6 @@ export default function IncidentsPage() {
                         </div>
                       ) : <span className="text-slate-600">—</span>}
                     </td>
-                    {/* Urgence */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       {inc.urgency ? (() => {
                         const u = urgencyConfig[inc.urgency as IncidentUrgency]
@@ -418,7 +400,6 @@ export default function IncidentsPage() {
                         ) : null
                       })() : <span className="text-slate-600">—</span>}
                     </td>
-                    {/* Type */}
                     <td className="px-4 py-3">
                       {inc.incident_type ? (
                         <span className={`text-xs font-medium ${typeColors[inc.incident_type as IncidentType] ?? "text-slate-400"}`}>
@@ -426,11 +407,9 @@ export default function IncidentsPage() {
                         </span>
                       ) : <span className="text-slate-600">—</span>}
                     </td>
-                    {/* Description */}
                     <td className="px-4 py-3 max-w-xs">
                       <span className="text-slate-200 line-clamp-2 text-sm">{inc.description}</span>
                     </td>
-                    {/* Responsable */}
                     <td className="px-4 py-3">
                       {inc.owner ? (
                         <div className="flex items-center gap-1.5 text-xs text-slate-300">
@@ -449,7 +428,6 @@ export default function IncidentsPage() {
                         </button>
                       )}
                     </td>
-                    {/* Statut */}
                     <td className="px-4 py-3">
                       <Select value={inc.status} onValueChange={v => handleStatusChange(inc, v as IncidentStatus)}>
                         <SelectTrigger className="h-7 text-xs border-0 bg-transparent p-0 w-auto gap-1 focus:ring-0">
@@ -464,7 +442,6 @@ export default function IncidentsPage() {
                         </SelectContent>
                       </Select>
                     </td>
-                    {/* Actions */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <Button
