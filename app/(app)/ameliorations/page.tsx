@@ -13,8 +13,8 @@ import * as bookingsRepo from "@/lib/repositories/bookings"
 import * as brainstormRepo from "@/lib/repositories/brainstorm"
 import type { GxReview } from "@/lib/repositories/gxReviews"
 import type { Improvement, ImprovementKind, BrainstormEntry, BrainstormCategory } from "@/lib/types"
+import { useSite } from "@/lib/context/SiteContext"
 
-const SITE_ID = '00000000-0000-0000-0000-000000000001'
 const ZONE = 'anniv' as const
 
 const kindConfig: Record<ImprovementKind, { label: string; icon: typeof ThumbsUp; activeBtn: string; bar: string; header: string; ring: string }> = {
@@ -36,6 +36,7 @@ const ALL_CATEGORIES: { id: BrainstormCategory; label: string }[] = [
 ]
 
 export default function AmeliorationsPage() {
+  const { siteId: SITE_ID } = useSite()
   const [items, setItems] = useState<Improvement[]>([])
   const [anniversaryReviews, setAnniversaryReviews] = useState<GxReview[]>([])
   const [brainstormEntries, setBrainstormEntries] = useState<BrainstormEntry[]>([])
@@ -142,23 +143,24 @@ export default function AmeliorationsPage() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { load() }, [SITE_ID])
 
   useEffect(() => {
     if (!brainstormSessionId) return
-    setBrainstormUrl(`${window.location.origin}/brainstorm?s=${brainstormSessionId}`)
-  }, [brainstormSessionId])
+    setBrainstormUrl(`${window.location.origin}/brainstorm?s=${brainstormSessionId}&site=${SITE_ID}`)
+  }, [brainstormSessionId, SITE_ID])
 
   useEffect(() => {
     const channel = supabase
-      .channel('brainstorm_entries_live')
+      .channel(`brainstorm_entries_live_${SITE_ID}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'brainstorm_entries', filter: `site_id=eq.${SITE_ID}` },
         (payload) => {
           setBrainstormEntries(prev => [payload.new as BrainstormEntry, ...prev])
         })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [])
+  }, [SITE_ID])
 
   const zoneItems = items.filter(i => i.zone === ZONE)
 
