@@ -12,10 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import * as pdcaRepo from "@/lib/repositories/pdca"
 import * as kaizenRepo from "@/lib/repositories/kaizen"
 import type { PDCA, PDCAStatus, PDCAPriority, Kaizen, KaizenStatus } from "@/lib/types"
-
-const SITE_ID = '00000000-0000-0000-0000-000000000001'
-
-// ── PDCA statuses ─────────────────────────────────────────────────────────────
+import { useSite } from "@/lib/context/SiteContext"
 
 const PDCA_STATUSES: PDCAStatus[] = ['plan', 'do', 'check', 'act']
 
@@ -26,7 +23,6 @@ const statusConfig: Record<PDCAStatus, { dot: string; label: string; next: strin
   act:   { dot: "bg-green-600",  label: "Validé / Standardisé",     next: "" },
 }
 
-// Post-it color = priority (importance)
 const PDCA_PRIORITIES: PDCAPriority[] = ['low', 'medium', 'urgent', 'investment']
 
 const priorityColor: Record<PDCAPriority, { bg: string; border: string; label: string; dot: string }> = {
@@ -51,8 +47,6 @@ const blankPdca = (o?: Partial<PDCAFormState>): PDCAFormState => ({
   origin_label: "", origin_id: "", ...o,
 })
 
-// ── Kaizen ────────────────────────────────────────────────────────────────────
-
 const kaizenStickyColor: Record<KaizenStatus, { bg: string; border: string; dot: string; label: string }> = {
   idea:        { bg: "bg-[#fef9c3]", border: "border-yellow-200",  dot: "bg-yellow-400",  label: "Idée" },
   in_progress: { bg: "bg-[#dbeafe]", border: "border-blue-200",    dot: "bg-blue-500",    label: "En cours" },
@@ -62,8 +56,6 @@ const kaizenStickyColor: Record<KaizenStatus, { bg: string; border: string; dot:
 
 type KaizenFormState = { description: string; benefits: string; estimated_cost: string; status: KaizenStatus; author: string }
 const blankKaizen = (): KaizenFormState => ({ description: "", benefits: "", estimated_cost: "0", status: "idea", author: "" })
-
-// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function LeanPage() {
   return (
@@ -76,6 +68,7 @@ export default function LeanPage() {
 function LeanPageInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { siteId: SITE_ID } = useSite()
 
   const [pdcas, setPdcas] = useState<PDCA[]>([])
   const [kaizens, setKaizens] = useState<Kaizen[]>([])
@@ -100,7 +93,7 @@ function LeanPageInner() {
       setPdcas(p); setKaizens(k)
     } catch (err) { console.error(err) }
     finally { setLoading(false) }
-  }, [])
+  }, [SITE_ID])
 
   useEffect(() => { load() }, [load])
 
@@ -117,8 +110,6 @@ function LeanPageInner() {
       window.history.replaceState({}, "", url.toString())
     }
   }, [searchParams])
-
-  // ── PDCA handlers ─────────────────────────────────────────────────────────
 
   const openEditPdca = (p: PDCA) => {
     setEditingPdca(p)
@@ -149,8 +140,6 @@ function LeanPageInner() {
     finally { setDeletingPdcaId(null) }
   }
 
-  // ── Kaizen handlers ───────────────────────────────────────────────────────
-
   const openEditKaizen = (k: Kaizen) => {
     setEditingKaizen(k)
     setKaizenForm({ description: k.description, benefits: k.benefits ?? "", estimated_cost: String(k.estimated_cost ?? 0), status: k.status, author: k.author })
@@ -179,12 +168,10 @@ function LeanPageInner() {
     router.push(`/lean?${params.toString()}`)
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
-
   return (
     <div className="space-y-10 max-w-[1600px]">
 
-      {/* ── PDCA Board ── */}
+      {/* PDCA Board */}
       <section>
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -225,7 +212,7 @@ function LeanPageInner() {
         )}
       </section>
 
-      {/* ── Améliorations Continues ── */}
+      {/* Améliorations Continues */}
       <section>
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -267,7 +254,7 @@ function LeanPageInner() {
         )}
       </section>
 
-      {/* ── PDCA Modal ── */}
+      {/* PDCA Modal */}
       <Dialog open={pdcaOpen} onOpenChange={setPdcaOpen}>
         <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -377,7 +364,7 @@ function LeanPageInner() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Kaizen Modal ── */}
+      {/* Kaizen Modal */}
       <Dialog open={kaizenOpen} onOpenChange={setKaizenOpen}>
         <DialogContent className="bg-slate-900 border-slate-700 text-white max-w-md">
           <DialogHeader>
@@ -428,8 +415,6 @@ function LeanPageInner() {
     </div>
   )
 }
-
-// ── Post-it PDCA ──────────────────────────────────────────────────────────────
 
 function StickyPDCA({ pdca, onEdit, onDelete, onAdvance, deleting }: {
   pdca: PDCA; onEdit: () => void; onDelete: () => void; onAdvance: () => void; deleting: boolean
@@ -503,8 +488,6 @@ function StickyPDCA({ pdca, onEdit, onDelete, onAdvance, deleting }: {
     </div>
   )
 }
-
-// ── Post-it Kaizen ────────────────────────────────────────────────────────────
 
 function StickyKaizen({ kaizen, onEdit, onDelete, onToPdca, deleting }: {
   kaizen: Kaizen; onEdit: () => void; onDelete: () => void; onToPdca: () => void; deleting: boolean
