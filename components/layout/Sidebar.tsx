@@ -3,7 +3,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard, TrendingUp, AlertTriangle, Star,
-  Layers, MapPin, Settings, Activity, LogOut, Brain, ListChecks
+  Layers, MapPin, Settings, Activity, LogOut, Brain, ListChecks, ClipboardList
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/context/AuthContext"
@@ -13,6 +13,7 @@ const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Tableau de bord" },
   { href: "/ameliorations", icon: ListChecks, label: "Anniversaire" },
   { href: "/performance", icon: TrendingUp, label: "Performance CA" },
+  { href: "/cadencier", icon: ClipboardList, label: "Cadencier" },
   { href: "/incidents", icon: AlertTriangle, label: "Incidents" },
   { href: "/gx", icon: Star, label: "GX Score" },
   { href: "/lean", icon: Layers, label: "Lean Tools" },

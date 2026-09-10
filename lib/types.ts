@@ -168,3 +168,27 @@ export interface DailyBriefing {
   objectives: string[]
   team: TeamMember[]
 }
+
+export interface Product {
+  id: string
+  site_id: string
+  supplier: string
+  name: string
+  price: number | null
+  pack_size: number | null
+  target_stock: number | null
+  zone: string | null
+  note: string | null
+  position: number
+  current_stock: number | null
+  created_at: string
+}
+
+export interface InventoryCount {
+  id: string
+  site_id: string
+  product_id: string
+  counted: number
+  session_date: string
+  created_at: string
+}
