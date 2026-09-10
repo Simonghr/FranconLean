@@ -184,11 +184,23 @@ export interface Product {
   created_at: string
 }
 
-export interface InventoryCount {
+export type CountSessionStatus = 'draft' | 'validated'
+
+export interface CountSession {
   id: string
   site_id: string
-  product_id: string
-  counted: number
   session_date: string
+  session_time: string | null
+  author_first: string | null
+  author_last: string | null
+  status: CountSessionStatus
   created_at: string
+  updated_at: string
+}
+
+export interface CountLine {
+  id: string
+  session_id: string
+  product_id: string
+  quantity: number | null
 }

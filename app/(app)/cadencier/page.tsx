@@ -1,11 +1,12 @@
 "use client"
 import { useState, useEffect, useMemo } from "react"
-import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck } from "lucide-react"
+import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import * as productsRepo from "@/lib/repositories/products"
 import { useSite } from "@/lib/context/SiteContext"
-import type { Product } from "@/lib/types"
+import type { Product, CountSession } from "@/lib/types"
 
 const NO_ZONE = "Sans zone"
 
@@ -14,6 +15,13 @@ function parseNum(v: string): number | null {
   if (t === "") return null
   const n = Number(t)
   return isNaN(n) ? null : n
+}
+function nowParts() {
+  const d = new Date()
+  return {
+    date: d.toLocaleDateString("en-CA", { timeZone: "Europe/Paris" }),
+    time: d.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }),
+  }
 }
 
 type GroupBy = "zone" | "supplier"
@@ -27,9 +35,35 @@ export default function CadencierPage() {
   const [supplierFilter, setSupplierFilter] = useState<string>("all")
   const [dragId, setDragId] = useState<string | null>(null)
 
+  // ── Saisie session ──────────────────────────────────────────────────────
+  const [session, setSession] = useState<CountSession | null>(null)
+  const [qty, setQty] = useState<Record<string, number | null>>({})
+  const [newOpen, setNewOpen] = useState(false)
+  const [saveOpen, setSaveOpen] = useState(false)
+  const [form, setForm] = useState(() => ({ ...nowParts(), first: "", last: "" }))
+
   useEffect(() => {
+    let alive = true
     setLoading(true)
-    productsRepo.getAll(SITE_ID).then(setProducts).catch(console.error).finally(() => setLoading(false))
+    ;(async () => {
+      try {
+        const prods = await productsRepo.getAll(SITE_ID)
+        if (!alive) return
+        setProducts(prods)
+        const s = await productsRepo.getActiveSession(SITE_ID)
+        if (!alive) return
+        setSession(s)
+        if (s) {
+          const lines = await productsRepo.getLines(s.id)
+          const map: Record<string, number | null> = {}
+          for (const l of lines) map[l.product_id] = l.quantity
+          setQty(map)
+        } else {
+          setQty({})
+        }
+      } catch (e) { console.error(e) } finally { if (alive) setLoading(false) }
+    })()
+    return () => { alive = false }
   }, [SITE_ID])
 
   const suppliers = useMemo(
@@ -41,11 +75,44 @@ export default function CadencierPage() {
     [products]
   )
 
-  const patchLocal = (id: string, patch: Partial<Product>) =>
-    setProducts(prev => prev.map(p => (p.id === id ? { ...p, ...patch } : p)))
-  const patch = (id: string, p: Partial<Product>) => {
-    patchLocal(id, p)
+  const patchProduct = (id: string, p: Partial<Product>) => {
+    setProducts(prev => prev.map(x => (x.id === id ? { ...x, ...p } : x)))
     productsRepo.update(id, p).catch(console.error)
+  }
+
+  const setQuantity = (product_id: string, v: number | null) => {
+    if (!session) return
+    setQty(prev => ({ ...prev, [product_id]: v }))
+    productsRepo.setLine(session.id, product_id, v).catch(console.error)
+  }
+
+  // ── Session actions ─────────────────────────────────────────────────────
+  const startSession = async () => {
+    try {
+      const s = await productsRepo.createSession({
+        site_id: SITE_ID,
+        session_date: form.date,
+        session_time: form.time || null,
+        author_first: form.first.trim() || null,
+        author_last: form.last.trim() || null,
+      })
+      setSession(s)
+      setQty({})
+      setNewOpen(false)
+    } catch (e) { console.error(e) }
+  }
+
+  const saveTemporary = async () => {
+    if (!session) return
+    try { await productsRepo.updateSession(session.id, { status: "draft" }) } catch (e) { console.error(e) }
+    setSaveOpen(false)
+  }
+  const validateSession = async () => {
+    if (!session) return
+    try { await productsRepo.updateSession(session.id, { status: "validated" }) } catch (e) { console.error(e) }
+    setSession(null)
+    setQty({})
+    setSaveOpen(false)
   }
 
   const addProduct = async () => {
@@ -58,7 +125,6 @@ export default function CadencierPage() {
       setProducts(prev => [...prev, created])
     } catch (e) { console.error(e) }
   }
-
   const deleteProduct = async (p: Product) => {
     if (!window.confirm(`Supprimer « ${p.name} » ?`)) return
     try {
@@ -67,8 +133,6 @@ export default function CadencierPage() {
     } catch (e) { console.error(e) }
   }
 
-  // Drag & drop reorder — persists the global counting order; dropping into
-  // another zone re-tags the moved product to that zone.
   const handleDrop = async (targetId: string) => {
     if (!dragId || dragId === targetId) { setDragId(null); return }
     const ordered = [...products].sort((a, b) => a.position - b.position)
@@ -109,7 +173,8 @@ export default function CadencierPage() {
     return [...map.entries()]
   }, [visible, groupBy])
 
-  const filledCount = products.filter(p => p.current_stock != null).length
+  const filledCount = Object.values(qty).filter(v => v != null).length
+  const active = !!session
 
   if (loading) return <div className="text-center py-20 text-slate-500">Chargement…</div>
 
@@ -123,13 +188,42 @@ export default function CadencierPage() {
             Cadencier de commande
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            Saisissez la quantité en stock de chaque produit · {filledCount}/{products.length} renseignés
+            {active
+              ? `Saisie en cours · ${filledCount}/${products.length} renseignés`
+              : "Démarrez une nouvelle saisie pour compter le stock"}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={addProduct}>
-          <Plus className="w-4 h-4 mr-1.5" /> Ajouter un produit
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={addProduct}>
+            <Plus className="w-4 h-4 mr-1.5" /> Produit
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => { setForm({ ...nowParts(), first: "", last: "" }); setNewOpen(true) }}>
+            <FilePlus2 className="w-4 h-4 mr-1.5" /> Nouvelle saisie
+          </Button>
+          <Button size="sm" onClick={() => setSaveOpen(true)} disabled={!active}>
+            <Save className="w-4 h-4 mr-1.5" /> Enregistrer
+          </Button>
+        </div>
       </div>
+
+      {/* Active session banner */}
+      {active && (
+        <div className="flex items-center gap-4 flex-wrap bg-cyan-500/10 border border-cyan-500/30 rounded-xl px-4 py-2.5 text-sm">
+          <span className="text-cyan-300 font-semibold flex items-center gap-1.5">
+            <ClipboardList className="w-4 h-4" /> Saisie du {session!.session_date.split("-").reverse().join("/")}
+          </span>
+          {(session!.author_first || session!.author_last) && (
+            <span className="text-slate-300 flex items-center gap-1.5">
+              <User className="w-3.5 h-3.5 text-slate-400" /> {[session!.author_first, session!.author_last].filter(Boolean).join(" ")}
+            </span>
+          )}
+          {session!.session_time && (
+            <span className="text-slate-300 flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-slate-400" /> {session!.session_time}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Controls */}
       <div className="flex items-center gap-3 flex-wrap">
@@ -156,6 +250,12 @@ export default function CadencierPage() {
           {suppliers.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
+
+      {!active && (
+        <div className="bg-slate-800/50 border border-dashed border-slate-600 rounded-xl px-4 py-3 text-sm text-slate-400">
+          Aucune saisie en cours. Cliquez sur <span className="text-slate-200 font-medium">Nouvelle saisie</span> pour commencer à compter — les cases de quantité deviendront alors modifiables.
+        </div>
+      )}
 
       {groupBy === "zone" && (
         <p className="text-xs text-slate-500 -mt-2">
@@ -195,23 +295,24 @@ export default function CadencierPage() {
                   </div>
                 </div>
 
-                {/* Zone tag */}
                 <input
                   list="zone-list"
                   defaultValue={p.zone ?? ""}
-                  onBlur={e => { const v = e.target.value.trim() || null; if (v !== p.zone) patch(p.id, { zone: v }) }}
+                  onBlur={e => { const v = e.target.value.trim() || null; if (v !== p.zone) patchProduct(p.id, { zone: v }) }}
                   className="w-24 bg-transparent text-xs text-slate-400 border-b border-transparent hover:border-slate-600 focus:border-cyan-500 focus:outline-none text-right hidden sm:block"
                   placeholder="+ zone"
                 />
 
-                {/* Quantity — the only thing to fill */}
+                {/* Quantity */}
                 <input
-                  key={p.current_stock ?? "empty"}
-                  defaultValue={p.current_stock ?? ""}
-                  onBlur={e => { const v = parseNum(e.target.value); if (v !== p.current_stock) patch(p.id, { current_stock: v }) }}
+                  key={`${p.id}-${qty[p.id] ?? "e"}`}
+                  defaultValue={qty[p.id] ?? ""}
+                  disabled={!active}
+                  onBlur={e => { const v = parseNum(e.target.value); if (v !== (qty[p.id] ?? null)) setQuantity(p.id, v) }}
                   inputMode="decimal"
-                  className={`w-20 flex-shrink-0 text-center rounded-md px-2 py-1.5 font-semibold border focus:outline-none ${
-                    p.current_stock == null
+                  title={active ? "" : "Démarrez une saisie pour renseigner la quantité"}
+                  className={`w-20 flex-shrink-0 text-center rounded-md px-2 py-1.5 font-semibold border focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
+                    qty[p.id] == null
                       ? "bg-slate-900 border-slate-600 text-white focus:border-cyan-500"
                       : "bg-cyan-500/10 border-cyan-500/40 text-cyan-300 focus:border-cyan-400"
                   }`}
@@ -232,7 +333,64 @@ export default function CadencierPage() {
       </datalist>
 
       {products.length === 0 && (
-        <div className="text-center text-slate-500 py-12">Aucun produit. Cliquez sur « Ajouter un produit ».</div>
+        <div className="text-center text-slate-500 py-12">Aucun produit. Cliquez sur « Produit ».</div>
+      )}
+
+      {/* ── New saisie modal ── */}
+      {newOpen && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setNewOpen(false)}>
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <FilePlus2 className="w-5 h-5 text-cyan-400" /> Nouvelle saisie
+            </h3>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Date</Label>
+                <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Heure</Label>
+                <Input type="time" value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Prénom</Label>
+                <Input value={form.first} onChange={e => setForm(f => ({ ...f, first: e.target.value }))} placeholder="Prénom" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Nom</Label>
+                <Input value={form.last} onChange={e => setForm(f => ({ ...f, last: e.target.value }))} placeholder="Nom" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setNewOpen(false)}>Annuler</Button>
+              <Button onClick={startSession} disabled={!form.date} className="bg-cyan-600 hover:bg-cyan-500">Démarrer</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Save modal ── */}
+      {saveOpen && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setSaveOpen(false)}>
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <Save className="w-5 h-5 text-cyan-400" /> Enregistrer la saisie
+            </h3>
+            <p className="text-sm text-slate-400">
+              {filledCount}/{products.length} produits renseignés.
+              Enregistrez temporairement pour reprendre plus tard, ou validez pour clôturer la saisie.
+            </p>
+            <div className="flex flex-col gap-2 pt-1">
+              <Button variant="outline" onClick={saveTemporary} className="justify-start">
+                <Clock className="w-4 h-4 mr-2 text-slate-400" /> Enregistrer temporairement
+              </Button>
+              <Button onClick={validateSession} className="justify-start bg-green-600 hover:bg-green-500">
+                <Check className="w-4 h-4 mr-2" /> Valider la saisie
+              </Button>
+              <Button variant="ghost" onClick={() => setSaveOpen(false)} className="justify-center text-slate-400">Annuler</Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

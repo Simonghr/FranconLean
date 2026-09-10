@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import type { Product, InventoryCount } from '@/lib/types'
+import type { Product, CountSession, CountLine } from '@/lib/types'
 
 export async function getAll(site_id: string): Promise<Product[]> {
   const { data, error } = await supabase
@@ -41,22 +41,54 @@ export async function saveOrder(ids: string[]): Promise<void> {
   )
 }
 
-// Snapshot every product's current_stock into the history table under one session date.
-export async function saveInventory(site_id: string, products: Product[], session_date: string): Promise<void> {
-  const rows = products
-    .filter(p => p.current_stock != null)
-    .map(p => ({ site_id, product_id: p.id, counted: p.current_stock as number, session_date }))
-  if (rows.length === 0) return
-  const { error } = await supabase.from('inventory_counts').insert(rows)
-  if (error) throw error
-}
+// ── Counting sessions ──────────────────────────────────────────────────────
 
-export async function getHistory(site_id: string): Promise<InventoryCount[]> {
+// Most recent draft (in-progress) session for a site, or null.
+export async function getActiveSession(site_id: string): Promise<CountSession | null> {
   const { data, error } = await supabase
-    .from('inventory_counts')
+    .from('count_sessions')
     .select('*')
     .eq('site_id', site_id)
-    .order('session_date', { ascending: false })
+    .eq('status', 'draft')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
   if (error) throw error
-  return data as InventoryCount[]
+  return (data as CountSession) ?? null
+}
+
+export async function createSession(
+  data: Pick<CountSession, 'site_id' | 'session_date'> &
+    Partial<Pick<CountSession, 'session_time' | 'author_first' | 'author_last'>>
+): Promise<CountSession> {
+  const { data: result, error } = await supabase.from('count_sessions').insert(data).select().single()
+  if (error) throw error
+  return result as CountSession
+}
+
+export async function updateSession(
+  id: string,
+  patch: Partial<Pick<CountSession, 'status' | 'session_date' | 'session_time' | 'author_first' | 'author_last'>>
+): Promise<CountSession> {
+  const { data, error } = await supabase
+    .from('count_sessions')
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as CountSession
+}
+
+export async function getLines(session_id: string): Promise<CountLine[]> {
+  const { data, error } = await supabase.from('count_lines').select('*').eq('session_id', session_id)
+  if (error) throw error
+  return data as CountLine[]
+}
+
+export async function setLine(session_id: string, product_id: string, quantity: number | null): Promise<void> {
+  const { error } = await supabase
+    .from('count_lines')
+    .upsert({ session_id, product_id, quantity }, { onConflict: 'session_id,product_id' })
+  if (error) throw error
 }
