@@ -80,6 +80,16 @@ export async function updateSession(
   return data as CountSession
 }
 
+export async function listSessions(site_id: string, status?: CountSession['status']): Promise<CountSession[]> {
+  let q = supabase.from('count_sessions').select('*').eq('site_id', site_id)
+  if (status) q = q.eq('status', status)
+  const { data, error } = await q
+    .order('session_date', { ascending: false })
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return data as CountSession[]
+}
+
 export async function getLines(session_id: string): Promise<CountLine[]> {
   const { data, error } = await supabase.from('count_lines').select('*').eq('session_id', session_id)
   if (error) throw error
