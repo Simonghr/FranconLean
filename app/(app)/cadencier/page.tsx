@@ -99,7 +99,10 @@ export default function CadencierPage() {
       setSession(s)
       setQty({})
       setNewOpen(false)
-    } catch (e) { console.error(e) }
+    } catch (e: any) {
+      console.error(e)
+      window.alert(`Impossible de démarrer la saisie : ${e?.message ?? e}`)
+    }
   }
 
   const saveTemporary = async () => {
