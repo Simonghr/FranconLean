@@ -121,7 +121,12 @@ export default function CadencierPage() {
   }
   const validateSession = async () => {
     if (!session) return
-    try { await productsRepo.updateSession(session.id, { status: "validated" }) } catch (e) { console.error(e) }
+    try {
+      // Complete the saisie: every product without a value is recorded as 0.
+      const missing = products.filter(p => qty[p.id] == null)
+      await Promise.all(missing.map(p => productsRepo.setLine(session.id, p.id, 0)))
+      await productsRepo.updateSession(session.id, { status: "validated" })
+    } catch (e) { console.error(e) }
     setSession(null)
     setQty({})
     setSaveOpen(false)
@@ -480,7 +485,12 @@ export default function CadencierPage() {
             </h3>
             <p className="text-sm text-slate-400">
               {filledCount}/{products.length} produits renseignés.
-              Enregistrez temporairement pour reprendre plus tard, ou validez pour clôturer la saisie.
+              {filledCount < products.length && (
+                <span className="text-amber-400"> À la validation, les {products.length - filledCount} produits non renseignés seront enregistrés à 0.</span>
+              )}
+            </p>
+            <p className="text-xs text-slate-500">
+              Enregistrez temporairement pour reprendre plus tard, ou validez pour clôturer la saisie (toutes les cases doivent alors avoir une valeur — 0 si rien en stock).
             </p>
             <div className="flex flex-col gap-2 pt-1">
               <Button variant="outline" onClick={saveTemporary} className="justify-start">
