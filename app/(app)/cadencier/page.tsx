@@ -44,7 +44,7 @@ export default function CadencierPage() {
   const [saveOpen, setSaveOpen] = useState(false)
   const [form, setForm] = useState(() => ({ ...nowParts(), first: "", last: "" }))
   const [addOpen, setAddOpen] = useState(false)
-  const [addForm, setAddForm] = useState({ name: "", supplier: "", zone: "", temporary: false })
+  const [addForm, setAddForm] = useState({ name: "", supplier: "", zone: "", unit: "", temporary: false })
 
   useEffect(() => {
     let alive = true
@@ -81,6 +81,10 @@ export default function CadencierPage() {
   // Zone options for the filter, including "Sans zone" when some products have none.
   const zoneOptions = useMemo(
     () => [...new Set(products.map(p => p.zone || NO_ZONE))].sort((a, b) => a.localeCompare(b)),
+    [products]
+  )
+  const unitOptions = useMemo(
+    () => [...new Set(products.map(p => p.unit).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b)),
     [products]
   )
 
@@ -142,6 +146,7 @@ export default function CadencierPage() {
         name,
         supplier: addForm.supplier.trim() || "Divers",
         zone: addForm.zone.trim() || null,
+        unit: addForm.unit.trim() || null,
         temporary: addForm.temporary,
         position: maxPos + 10,
       })
@@ -231,7 +236,7 @@ export default function CadencierPage() {
             </Button>
           </Link>
           <Button variant="outline" size="sm" onClick={() => {
-            setAddForm({ name: "", supplier: suppliers[0] ?? "", zone: "", temporary: false })
+            setAddForm({ name: "", supplier: suppliers[0] ?? "", zone: "", unit: "", temporary: false })
             setAddOpen(true)
           }}>
             <Plus className="w-4 h-4 mr-1.5" /> Produit
@@ -348,9 +353,18 @@ export default function CadencierPage() {
                     )}
                   </div>
                   <div className="text-[11px] text-slate-500 truncate">
-                    {p.supplier}{p.note ? ` · ${p.note}` : ""}
+                    {p.supplier}{p.unit ? ` · ${p.unit}` : ""}{p.note ? ` · ${p.note}` : ""}
                   </div>
                 </div>
+
+                <input
+                  list="unit-list"
+                  defaultValue={p.unit ?? ""}
+                  onBlur={e => { const v = e.target.value.trim() || null; if (v !== p.unit) patchProduct(p.id, { unit: v }) }}
+                  className="w-20 bg-transparent text-xs text-slate-400 border-b border-transparent hover:border-slate-600 focus:border-cyan-500 focus:outline-none text-right hidden sm:block"
+                  placeholder="unité"
+                  title="Unité de comptage"
+                />
 
                 <input
                   list="zone-list"
@@ -387,6 +401,9 @@ export default function CadencierPage() {
 
       <datalist id="zone-list">
         {zones.map(z => <option key={z} value={z} />)}
+      </datalist>
+      <datalist id="unit-list">
+        {unitOptions.map(u => <option key={u} value={u} />)}
       </datalist>
 
       {products.length === 0 && (
@@ -427,6 +444,12 @@ export default function CadencierPage() {
                   <option value="">Sans zone</option>
                   {zones.map(z => <option key={z} value={z}>{z}</option>)}
                 </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Unité de comptage</Label>
+                <Input list="unit-list" value={addForm.unit}
+                  onChange={e => setAddForm(f => ({ ...f, unit: e.target.value }))}
+                  placeholder="ex. bouteille, pièce, kg…" />
               </div>
               <label className="flex items-center gap-2.5 cursor-pointer pt-1">
                 <input type="checkbox" checked={addForm.temporary}

@@ -182,6 +182,7 @@ export interface Product {
   position: number
   current_stock: number | null
   temporary: boolean
+  unit: string | null
   created_at: string
 }
 
