@@ -41,6 +41,8 @@ export default function CadencierPage() {
   const [newOpen, setNewOpen] = useState(false)
   const [saveOpen, setSaveOpen] = useState(false)
   const [form, setForm] = useState(() => ({ ...nowParts(), first: "", last: "" }))
+  const [addOpen, setAddOpen] = useState(false)
+  const [addForm, setAddForm] = useState({ name: "", supplier: "", zone: "", temporary: false })
 
   useEffect(() => {
     let alive = true
@@ -118,15 +120,25 @@ export default function CadencierPage() {
     setSaveOpen(false)
   }
 
-  const addProduct = async () => {
-    const name = window.prompt("Nom du produit ?")?.trim()
+  const submitAddProduct = async () => {
+    const name = addForm.name.trim()
     if (!name) return
-    const supplier = window.prompt("Fournisseur ?")?.trim() || "Divers"
     const maxPos = products.reduce((m, p) => Math.max(m, p.position), 0)
     try {
-      const created = await productsRepo.create({ site_id: SITE_ID, supplier, name, position: maxPos + 10 })
+      const created = await productsRepo.create({
+        site_id: SITE_ID,
+        name,
+        supplier: addForm.supplier.trim() || "Divers",
+        zone: addForm.zone.trim() || null,
+        temporary: addForm.temporary,
+        position: maxPos + 10,
+      })
       setProducts(prev => [...prev, created])
-    } catch (e) { console.error(e) }
+      setAddOpen(false)
+    } catch (e: any) {
+      console.error(e)
+      window.alert(`Impossible d'ajouter le produit : ${e?.message ?? e}`)
+    }
   }
   const deleteProduct = async (p: Product) => {
     if (!window.confirm(`Supprimer « ${p.name} » ?`)) return
@@ -197,7 +209,10 @@ export default function CadencierPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={addProduct}>
+          <Button variant="outline" size="sm" onClick={() => {
+            setAddForm({ name: "", supplier: suppliers[0] ?? "", zone: "", temporary: false })
+            setAddOpen(true)
+          }}>
             <Plus className="w-4 h-4 mr-1.5" /> Produit
           </Button>
           <Button size="sm" variant="outline" onClick={() => { setForm({ ...nowParts(), first: "", last: "" }); setNewOpen(true) }}>
@@ -292,7 +307,14 @@ export default function CadencierPage() {
                 )}
 
                 <div className="flex-1 min-w-0">
-                  <div className="text-slate-100 truncate">{p.name}</div>
+                  <div className="text-slate-100 truncate flex items-center gap-1.5">
+                    {p.name}
+                    {p.temporary && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 flex-shrink-0">
+                        Temporaire
+                      </span>
+                    )}
+                  </div>
                   <div className="text-[11px] text-slate-500 truncate">
                     {p.supplier}{p.note ? ` · ${p.note}` : ""}
                   </div>
@@ -337,6 +359,56 @@ export default function CadencierPage() {
 
       {products.length === 0 && (
         <div className="text-center text-slate-500 py-12">Aucun produit. Cliquez sur « Produit ».</div>
+      )}
+
+      {/* ── Add product modal ── */}
+      {addOpen && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setAddOpen(false)}>
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+              <Plus className="w-5 h-5 text-cyan-400" /> Ajouter un produit
+            </h3>
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>Nom du produit</Label>
+                <Input autoFocus value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
+                  onKeyDown={e => { if (e.key === "Enter") submitAddProduct() }} placeholder="Nom du produit" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Fournisseur</Label>
+                <select
+                  value={addForm.supplier}
+                  onChange={e => setAddForm(f => ({ ...f, supplier: e.target.value }))}
+                  className="w-full text-sm px-3 py-2 rounded-lg border bg-slate-800 text-slate-200 border-slate-700 focus:outline-none focus:border-cyan-500"
+                >
+                  {suppliers.length === 0 && <option value="">—</option>}
+                  {suppliers.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Zone</Label>
+                <select
+                  value={addForm.zone}
+                  onChange={e => setAddForm(f => ({ ...f, zone: e.target.value }))}
+                  className="w-full text-sm px-3 py-2 rounded-lg border bg-slate-800 text-slate-200 border-slate-700 focus:outline-none focus:border-cyan-500"
+                >
+                  <option value="">Sans zone</option>
+                  {zones.map(z => <option key={z} value={z}>{z}</option>)}
+                </select>
+              </div>
+              <label className="flex items-center gap-2.5 cursor-pointer pt-1">
+                <input type="checkbox" checked={addForm.temporary}
+                  onChange={e => setAddForm(f => ({ ...f, temporary: e.target.checked }))}
+                  className="w-4 h-4 accent-amber-500" />
+                <span className="text-sm text-slate-300">Produit temporaire</span>
+              </label>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setAddOpen(false)}>Annuler</Button>
+              <Button onClick={submitAddProduct} disabled={!addForm.name.trim()} className="bg-cyan-600 hover:bg-cyan-500">Ajouter</Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── New saisie modal ── */}

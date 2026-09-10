@@ -181,6 +181,7 @@ export interface Product {
   note: string | null
   position: number
   current_stock: number | null
+  temporary: boolean
   created_at: string
 }
 
