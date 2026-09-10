@@ -33,8 +33,9 @@ export function SiteProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let stored: string | null = null
     try {
-      const stored = localStorage.getItem(STORAGE_KEY)
+      stored = localStorage.getItem(STORAGE_KEY)
       if (stored) setSiteIdState(stored)
     } catch {}
 
@@ -43,7 +44,17 @@ export function SiteProvider({ children }: { children: React.ReactNode }) {
       .select("id, name")
       .order("name", { ascending: true })
       .then(({ data }) => {
-        if (data) setSites(data as Site[])
+        if (data && data.length) {
+          setSites(data as Site[])
+          // If the remembered site no longer exists (e.g. it was deleted),
+          // fall back to a valid one so queries don't target a dead site_id.
+          const valid = data.some(s => s.id === stored)
+          if (!valid) {
+            const fallback = data.some(s => s.id === DEFAULT_SITE_ID) ? DEFAULT_SITE_ID : data[0].id
+            setSiteIdState(fallback)
+            try { localStorage.setItem(STORAGE_KEY, fallback) } catch {}
+          }
+        }
         setLoading(false)
       })
   }, [])
