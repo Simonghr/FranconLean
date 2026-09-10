@@ -33,6 +33,7 @@ export default function CadencierPage() {
   const [search, setSearch] = useState("")
   const [groupBy, setGroupBy] = useState<GroupBy>("zone")
   const [supplierFilter, setSupplierFilter] = useState<string>("all")
+  const [zoneFilter, setZoneFilter] = useState<string>("all")
   const [dragId, setDragId] = useState<string | null>(null)
 
   // ── Saisie session ──────────────────────────────────────────────────────
@@ -74,6 +75,11 @@ export default function CadencierPage() {
   )
   const zones = useMemo(
     () => [...new Set(products.map(p => p.zone).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b)),
+    [products]
+  )
+  // Zone options for the filter, including "Sans zone" when some products have none.
+  const zoneOptions = useMemo(
+    () => [...new Set(products.map(p => p.zone || NO_ZONE))].sort((a, b) => a.localeCompare(b)),
     [products]
   )
 
@@ -173,10 +179,14 @@ export default function CadencierPage() {
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase()
     return products
-      .filter(p => supplierFilter === "all" || p.supplier === supplierFilter)
+      .filter(p =>
+        groupBy === "zone"
+          ? zoneFilter === "all" || (p.zone || NO_ZONE) === zoneFilter
+          : supplierFilter === "all" || p.supplier === supplierFilter
+      )
       .filter(p => !q || p.name.toLowerCase().includes(q) || p.supplier.toLowerCase().includes(q))
       .sort((a, b) => a.position - b.position)
-  }, [products, search, supplierFilter])
+  }, [products, search, supplierFilter, zoneFilter, groupBy])
 
   const groups = useMemo(() => {
     const map = new Map<string, Product[]>()
@@ -259,14 +269,25 @@ export default function CadencierPage() {
             </button>
           ))}
         </div>
-        <select
-          value={supplierFilter}
-          onChange={e => setSupplierFilter(e.target.value)}
-          className="text-sm px-3 py-2 rounded-lg border bg-slate-800 text-slate-300 border-slate-700 focus:outline-none focus:border-cyan-500"
-        >
-          <option value="all">Tous les fournisseurs</option>
-          {suppliers.map(s => <option key={s} value={s}>{s}</option>)}
-        </select>
+        {groupBy === "zone" ? (
+          <select
+            value={zoneFilter}
+            onChange={e => setZoneFilter(e.target.value)}
+            className="text-sm px-3 py-2 rounded-lg border bg-slate-800 text-slate-300 border-slate-700 focus:outline-none focus:border-cyan-500"
+          >
+            <option value="all">Toutes les zones</option>
+            {zoneOptions.map(z => <option key={z} value={z}>{z}</option>)}
+          </select>
+        ) : (
+          <select
+            value={supplierFilter}
+            onChange={e => setSupplierFilter(e.target.value)}
+            className="text-sm px-3 py-2 rounded-lg border bg-slate-800 text-slate-300 border-slate-700 focus:outline-none focus:border-cyan-500"
+          >
+            <option value="all">Tous les fournisseurs</option>
+            {suppliers.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        )}
       </div>
 
       {!active && (
