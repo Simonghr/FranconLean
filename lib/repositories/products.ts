@@ -90,6 +90,11 @@ export async function listSessions(site_id: string, status?: CountSession['statu
   return data as CountSession[]
 }
 
+export async function deleteSession(id: string): Promise<void> {
+  const { error } = await supabase.from('count_sessions').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function getLines(session_id: string): Promise<CountLine[]> {
   const { data, error } = await supabase.from('count_lines').select('*').eq('session_id', session_id)
   if (error) throw error
