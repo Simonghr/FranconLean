@@ -1,0 +1,20 @@
+name: Roller Probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call roller-probe edge function
+        run: |
+          BASE="${{ secrets.SUPABASE_URL }}"
+          BASE="${BASE%/}"
+          echo "Calling $BASE/functions/v1/roller-probe"
+          curl -s -X POST "$BASE/functions/v1/roller-probe" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Content-Type: application/json" \
+            --max-time 150 -o out.json -w "HTTP %{http_code}\n"
+          echo "----- RESULT -----"
+          cat out.json | jq . 2>/dev/null || cat out.json
