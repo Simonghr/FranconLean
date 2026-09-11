@@ -70,6 +70,18 @@ export async function updateLine(
   return data as SalesLine
 }
 
+// Distinct Roller product names seen across all imports for a site (for pickers).
+export async function knownRollerNames(site_id: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('sales_lines')
+    .select('roller_name, sales_imports!inner(site_id)')
+    .eq('sales_imports.site_id', site_id)
+  if (error) throw error
+  const set = new Set<string>()
+  for (const r of (data ?? []) as { roller_name: string }[]) set.add(r.roller_name)
+  return [...set].sort((a, b) => a.localeCompare(b))
+}
+
 // ── Aliases (remember roller product → cadencier product + deductible) ───────
 
 export async function getAliases(site_id: string): Promise<Record<string, RollerAlias>> {

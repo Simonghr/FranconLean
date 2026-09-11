@@ -1,12 +1,13 @@
 "use client"
 import { useState, useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
-import { ShoppingCart, ArrowLeft, Trash2, Check, FileUp, TrendingDown } from "lucide-react"
+import { ShoppingCart, ArrowLeft, Trash2, Check, FileUp, TrendingDown, ChefHat } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import * as salesRepo from "@/lib/repositories/salesImports"
 import * as productsRepo from "@/lib/repositories/products"
+import * as recipesRepo from "@/lib/repositories/recipes"
 import { useSite } from "@/lib/context/SiteContext"
-import type { Product, SalesImport, SalesLine, RollerAlias } from "@/lib/types"
+import type { Product, SalesImport, SalesLine, RollerAlias, RecipeLine } from "@/lib/types"
 
 function frDate(d: string | null) {
   return d ? d.split("-").reverse().join("/") : "—"
@@ -65,6 +66,7 @@ export default function VentesPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [imports, setImports] = useState<SalesImport[]>([])
   const [aliases, setAliases] = useState<Record<string, RollerAlias>>({})
+  const [recipeMap, setRecipeMap] = useState<Map<string, RecipeLine[]>>(new Map())
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<SalesImport | null>(null)
   const [lines, setLines] = useState<SalesLine[]>([])
@@ -88,11 +90,11 @@ export default function VentesPage() {
     setLoading(true)
     ;(async () => {
       try {
-        const [prods, imps, als] = await Promise.all([
-          productsRepo.getAll(SITE_ID), salesRepo.list(SITE_ID), salesRepo.getAliases(SITE_ID),
+        const [prods, imps, als, recs] = await Promise.all([
+          productsRepo.getAll(SITE_ID), salesRepo.list(SITE_ID), salesRepo.getAliases(SITE_ID), recipesRepo.getAll(SITE_ID),
         ])
         if (!alive) return
-        setProducts(prods); setImports(imps); setAliases(als)
+        setProducts(prods); setImports(imps); setAliases(als); setRecipeMap(recipesRepo.buildMap(recs))
         if (imps.length) void openImport(imps[0])
       } catch (e) { console.error(e) } finally { if (alive) setLoading(false) }
     })()
@@ -163,16 +165,28 @@ export default function VentesPage() {
     } catch (e) { console.error(e) }
   }
 
-  const deductLines = lines.filter(l => l.deductible && l.product_id && (l.qty_sold ?? 0) > 0)
+  // A sold line contributes to stock if it has a recipe, or (1:1) a deductible mapped product.
+  const recipeFor = (l: SalesLine) => recipeMap.get(recipesRepo.normName(l.roller_name))
+  const deductLines = lines.filter(l => (l.qty_sold ?? 0) > 0 && (recipeFor(l) || (l.deductible && l.product_id)))
 
   const apply = async () => {
     if (!selected) return
-    if (!window.confirm(`Appliquer les ventes ? Le stock de ${deductLines.length} produit(s) sera déduit.`)) return
+    if (!window.confirm(`Appliquer les ventes ? Le stock de ${deductLines.length} produit(s) vendu(s) sera déduit.`)) return
     setApplying(true)
     try {
       // Sum deductions per product, then subtract from theoretical stock.
+      // Recipes take precedence: a sold item with a recipe deducts every
+      // ingredient (× qty sold); otherwise a 1:1 deductible mapping applies.
       const deltas = new Map<string, number>()
-      for (const l of deductLines) deltas.set(l.product_id!, (deltas.get(l.product_id!) ?? 0) + (l.qty_sold as number))
+      for (const l of deductLines) {
+        const sold = l.qty_sold as number
+        const rec = recipeFor(l)
+        if (rec) {
+          for (const c of rec) deltas.set(c.product_id, (deltas.get(c.product_id) ?? 0) + sold * (c.qty ?? 1))
+        } else {
+          deltas.set(l.product_id!, (deltas.get(l.product_id!) ?? 0) + sold)
+        }
+      }
       const updates = new Map<string, number>()
       for (const [pid, sold] of deltas) {
         const p = productById.get(pid); if (!p) continue
@@ -190,8 +204,9 @@ export default function VentesPage() {
   if (loading) return <div className="text-center py-20 text-slate-500">Chargement…</div>
 
   const isApplied = selected?.status === "applied"
-  const matchedCount = lines.filter(l => l.product_id).length
-  const nonDeductibleCount = lines.filter(l => !l.deductible).length
+  const recipeCount = lines.filter(l => recipeFor(l)).length
+  const matchedCount = lines.filter(l => !recipeFor(l) && l.product_id).length
+  const nonDeductibleCount = lines.filter(l => !recipeFor(l) && !l.deductible).length
 
   return (
     <div className="space-y-6 max-w-[1200px]">
@@ -204,7 +219,10 @@ export default function VentesPage() {
             <ShoppingCart className="w-6 h-6 text-rose-400" /> Ventes Roller
           </h1>
         </div>
-        <div>
+        <div className="flex items-center gap-2">
+          <Link href="/cadencier/recettes">
+            <Button size="sm" variant="outline"><ChefHat className="w-4 h-4 mr-1.5" /> Recettes</Button>
+          </Link>
           <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) void onFile(f) }} />
           <Button size="sm" onClick={() => fileRef.current?.click()}>
@@ -254,6 +272,7 @@ export default function VentesPage() {
                 <div className="flex items-center gap-2 mb-3 text-xs flex-wrap">
                   <span className="px-2 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300">{lines.length} produits vendus</span>
                   <span className="px-2 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300">{matchedCount} associés</span>
+                  {recipeCount > 0 && <span className="px-2 py-1 rounded-full bg-violet-500/10 border border-violet-500/30 text-violet-300">{recipeCount} via recette</span>}
                   <span className="px-2 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-400">{nonDeductibleCount} non déductibles</span>
                 </div>
 
@@ -282,32 +301,46 @@ export default function VentesPage() {
                           <tr><td colSpan={5} className="text-center text-slate-500 py-8">Aucune ligne.</td></tr>
                         ) : lines.map(l => {
                           const p = l.product_id ? productById.get(l.product_id) : null
+                          const rec = recipeFor(l)
                           return (
-                            <tr key={l.id} className={`border-b border-slate-700/40 ${!l.deductible ? "opacity-50" : ""}`}>
+                            <tr key={l.id} className={`border-b border-slate-700/40 ${!rec && !l.deductible ? "opacity-50" : ""}`}>
                               <td className="px-3 py-2">
                                 <div className="text-slate-200">{l.roller_name}</div>
                                 {l.category && <div className="text-[10px] text-slate-500">{l.category}</div>}
                               </td>
                               <td className="px-2 py-2 text-right text-rose-300 font-semibold whitespace-nowrap">{l.qty_sold ?? 0}</td>
-                              <td className="px-2 py-2">
-                                <select value={l.product_id ?? ""} disabled={isApplied}
-                                  onChange={e => chooseProduct(l, e.target.value || null)}
-                                  className="max-w-[240px] text-xs px-2 py-1 rounded border bg-slate-800 text-slate-200 border-slate-700 focus:outline-none focus:border-rose-500">
-                                  <option value="">— non associé —</option>
-                                  {productOptions.map(op => <option key={op.id} value={op.id}>{op.supplier} — {op.name}</option>)}
-                                </select>
-                              </td>
-                              <td className="px-2 py-2 text-center">
-                                <input type="checkbox" checked={l.deductible} disabled={isApplied}
-                                  onChange={e => toggleDeductible(l, e.target.checked)} className="w-4 h-4 accent-rose-500" />
-                              </td>
-                              <td className="px-3 py-2 text-right whitespace-nowrap">
-                                {p ? (
-                                  <span className={`font-semibold ${(p.stock ?? 0) < 0 ? "text-red-400" : "text-slate-200"}`}>
-                                    {p.stock ?? 0}<span className="text-[10px] text-slate-500 ml-1">{p.unit ?? ""}</span>
-                                  </span>
-                                ) : <span className="text-slate-600">—</span>}
-                              </td>
+                              {rec ? (
+                                <td className="px-2 py-2" colSpan={3}>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-300 border border-violet-500/30">Recette</span>
+                                    <span className="text-xs text-slate-400">
+                                      {rec.map(c => `${productById.get(c.product_id)?.name ?? "?"} ×${c.qty ?? 1}`).join("  +  ")}
+                                    </span>
+                                  </div>
+                                </td>
+                              ) : (
+                                <>
+                                  <td className="px-2 py-2">
+                                    <select value={l.product_id ?? ""} disabled={isApplied}
+                                      onChange={e => chooseProduct(l, e.target.value || null)}
+                                      className="max-w-[240px] text-xs px-2 py-1 rounded border bg-slate-800 text-slate-200 border-slate-700 focus:outline-none focus:border-rose-500">
+                                      <option value="">— non associé —</option>
+                                      {productOptions.map(op => <option key={op.id} value={op.id}>{op.supplier} — {op.name}</option>)}
+                                    </select>
+                                  </td>
+                                  <td className="px-2 py-2 text-center">
+                                    <input type="checkbox" checked={l.deductible} disabled={isApplied}
+                                      onChange={e => toggleDeductible(l, e.target.checked)} className="w-4 h-4 accent-rose-500" />
+                                  </td>
+                                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                                    {p ? (
+                                      <span className={`font-semibold ${(p.stock ?? 0) < 0 ? "text-red-400" : "text-slate-200"}`}>
+                                        {p.stock ?? 0}<span className="text-[10px] text-slate-500 ml-1">{p.unit ?? ""}</span>
+                                      </span>
+                                    ) : <span className="text-slate-600">—</span>}
+                                  </td>
+                                </>
+                              )}
                             </tr>
                           )
                         })}

@@ -258,6 +258,15 @@ export interface SalesImport {
   updated_at: string
 }
 
+export interface RecipeLine {
+  id: string
+  site_id: string
+  roller_name: string
+  product_id: string
+  qty: number | null
+  created_at: string
+}
+
 export interface SalesLine {
   id: string
   import_id: string
