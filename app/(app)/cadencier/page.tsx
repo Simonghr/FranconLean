@@ -415,6 +415,9 @@ export default function CadencierPage() {
       <datalist id="unit-list">
         {unitOptions.map(u => <option key={u} value={u} />)}
       </datalist>
+      <datalist id="supplier-list">
+        {suppliers.map(s => <option key={s} value={s} />)}
+      </datalist>
 
       {products.length === 0 && (
         <div className="text-center text-slate-500 py-12">Aucun produit. Cliquez sur « Produit ».</div>
@@ -435,14 +438,10 @@ export default function CadencierPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Fournisseur</Label>
-                <select
-                  value={addForm.supplier}
+                <Input list="supplier-list" value={addForm.supplier}
                   onChange={e => setAddForm(f => ({ ...f, supplier: e.target.value }))}
-                  className="w-full text-sm px-3 py-2 rounded-lg border bg-slate-800 text-slate-200 border-slate-700 focus:outline-none focus:border-cyan-500"
-                >
-                  {suppliers.length === 0 && <option value="">—</option>}
-                  {suppliers.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
+                  placeholder="Choisir ou saisir un nouveau fournisseur…" />
+                <p className="text-[11px] text-slate-500">Tapez un nom pour créer un nouveau fournisseur (ex. Nespresso).</p>
               </div>
               <div className="space-y-1.5">
                 <Label>Zone</Label>
