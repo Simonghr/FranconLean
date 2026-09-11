@@ -94,6 +94,17 @@ export default function ReceptionPage() {
     deliveriesRepo.updateLine(id, patch).catch(console.error)
   }
 
+  // Change colis or colisage and recompute the received qty (colis × colisage)
+  // live, so the "Reçu (unité)" column stays in sync.
+  const patchQtyDriver = (line: DeliveryLine, patch: Partial<DeliveryLine>) => {
+    const merged = { ...line, ...patch }
+    const full = { ...patch } as Partial<DeliveryLine>
+    if (merged.raw_qty != null) {
+      full.qty = merged.raw_pack ? merged.raw_qty * merged.raw_pack : merged.raw_qty
+    }
+    patchLine(line.id, full)
+  }
+
   // When a product is chosen, default the received qty from colis × colisage if available.
   const chooseProduct = (line: DeliveryLine, product_id: string | null) => {
     const patch: Partial<DeliveryLine> = { product_id }
@@ -269,12 +280,12 @@ export default function ReceptionPage() {
                               </td>
                               <td className="px-2 py-2 text-right">
                                 <input defaultValue={l.raw_qty ?? ""} disabled={isValidated}
-                                  onBlur={e => patchLine(l.id, { raw_qty: parseNum(e.target.value) })}
+                                  onBlur={e => { const v = parseNum(e.target.value); if (v !== (l.raw_qty ?? null)) patchQtyDriver(l, { raw_qty: v }) }}
                                   className="w-12 bg-transparent text-right text-slate-300 border-b border-transparent hover:border-slate-600 focus:border-emerald-500 focus:outline-none" placeholder="—" />
                               </td>
                               <td className="px-2 py-2 text-right">
                                 <input defaultValue={l.raw_pack ?? ""} disabled={isValidated}
-                                  onBlur={e => patchLine(l.id, { raw_pack: parseNum(e.target.value) })}
+                                  onBlur={e => { const v = parseNum(e.target.value); if (v !== (l.raw_pack ?? null)) patchQtyDriver(l, { raw_pack: v }) }}
                                   className="w-12 bg-transparent text-right text-slate-300 border-b border-transparent hover:border-slate-600 focus:border-emerald-500 focus:outline-none" placeholder="—" />
                               </td>
                               <td className="px-2 py-2 text-right whitespace-nowrap">
