@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
-import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck, ShoppingCart, ChefHat } from "lucide-react"
+import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck, ShoppingCart, ChefHat, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -44,6 +44,7 @@ export default function CadencierPage() {
   const [saveOpen, setSaveOpen] = useState(false)
   const [form, setForm] = useState(() => ({ ...nowParts(), first: "", last: "" }))
   const [addOpen, setAddOpen] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
   const [addForm, setAddForm] = useState({ name: "", supplier: "", zone: "", unit: "", temporary: false })
 
   useEffect(() => {
@@ -136,25 +137,38 @@ export default function CadencierPage() {
     setSaveOpen(false)
   }
 
+  const openEdit = (p: Product) => {
+    setEditId(p.id)
+    setAddForm({
+      name: p.name, supplier: p.supplier ?? "", zone: p.zone ?? "",
+      unit: p.unit ?? "", temporary: p.temporary,
+    })
+    setAddOpen(true)
+  }
+
   const submitAddProduct = async () => {
     const name = addForm.name.trim()
     if (!name) return
-    const maxPos = products.reduce((m, p) => Math.max(m, p.position), 0)
+    const patch = {
+      name,
+      supplier: addForm.supplier.trim() || "Divers",
+      zone: addForm.zone.trim() || null,
+      unit: addForm.unit.trim() || null,
+      temporary: addForm.temporary,
+    }
     try {
-      const created = await productsRepo.create({
-        site_id: SITE_ID,
-        name,
-        supplier: addForm.supplier.trim() || "Divers",
-        zone: addForm.zone.trim() || null,
-        unit: addForm.unit.trim() || null,
-        temporary: addForm.temporary,
-        position: maxPos + 10,
-      })
-      setProducts(prev => [...prev, created])
-      setAddOpen(false)
+      if (editId) {
+        const updated = await productsRepo.update(editId, patch)
+        setProducts(prev => prev.map(p => p.id === editId ? updated : p))
+      } else {
+        const maxPos = products.reduce((m, p) => Math.max(m, p.position), 0)
+        const created = await productsRepo.create({ site_id: SITE_ID, position: maxPos + 10, ...patch })
+        setProducts(prev => [...prev, created])
+      }
+      setAddOpen(false); setEditId(null)
     } catch (e: any) {
       console.error(e)
-      window.alert(`Impossible d'ajouter le produit : ${e?.message ?? e}`)
+      window.alert(`Impossible d'enregistrer le produit : ${e?.message ?? e}`)
     }
   }
   const deleteProduct = async (p: Product) => {
@@ -251,6 +265,7 @@ export default function CadencierPage() {
             </Button>
           </Link>
           <Button variant="outline" size="sm" onClick={() => {
+            setEditId(null)
             setAddForm({ name: "", supplier: suppliers[0] ?? "", zone: "", unit: "", temporary: false })
             setAddOpen(true)
           }}>
@@ -405,6 +420,9 @@ export default function CadencierPage() {
                   placeholder="Qté"
                 />
 
+                <button onClick={() => openEdit(p)} title="Modifier le produit" className="text-slate-600 hover:text-cyan-400 transition-colors flex-shrink-0">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
                 <button onClick={() => deleteProduct(p)} className="text-slate-600 hover:text-red-400 transition-colors flex-shrink-0">
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -430,10 +448,10 @@ export default function CadencierPage() {
 
       {/* ── Add product modal ── */}
       {addOpen && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setAddOpen(false)}>
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => { setAddOpen(false); setEditId(null) }}>
           <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <Plus className="w-5 h-5 text-cyan-400" /> Ajouter un produit
+              {editId ? <><Pencil className="w-5 h-5 text-cyan-400" /> Modifier le produit</> : <><Plus className="w-5 h-5 text-cyan-400" /> Ajouter un produit</>}
             </h3>
             <div className="space-y-3">
               <div className="space-y-1.5">
@@ -469,8 +487,8 @@ export default function CadencierPage() {
               </label>
             </div>
             <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" onClick={() => setAddOpen(false)}>Annuler</Button>
-              <Button onClick={submitAddProduct} disabled={!addForm.name.trim()} className="bg-cyan-600 hover:bg-cyan-500">Ajouter</Button>
+              <Button variant="outline" onClick={() => { setAddOpen(false); setEditId(null) }}>Annuler</Button>
+              <Button onClick={submitAddProduct} disabled={!addForm.name.trim()} className="bg-cyan-600 hover:bg-cyan-500">{editId ? "Enregistrer" : "Ajouter"}</Button>
             </div>
           </div>
         </div>
