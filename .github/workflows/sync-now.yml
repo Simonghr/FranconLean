@@ -1,0 +1,94 @@
+name: Sync Now (CA + GX)
+
+# Manual, on-demand refresh of both Roller syncs (revenue + GX score).
+# Exists because the scheduled workflows get auto-disabled after repo
+# inactivity; this one is triggered by hand when a fresh sync is needed.
+on:
+  workflow_dispatch:
+    inputs:
+      ca_days:
+        description: "CA: number of days to re-sync"
+        required: false
+        default: "7"
+      gx_days:
+        description: "GX: number of days to re-sync"
+        required: false
+        default: "14"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync CA (rapid-processor, chunked by 10 days)
+        run: |
+          DAYS="${{ github.event.inputs.ca_days || '7' }}"
+          BASE="${{ secrets.SUPABASE_URL }}"; BASE="${BASE%/}"
+          CHUNK=10
+          END=$(date -u +%F); START=$(date -u -d "$END - $((DAYS - 1)) days" +%F)
+          echo "CA window: $START -> $END"
+          FAILED=0; cur="$START"
+          while [ "$cur" \< "$END" ] || [ "$cur" = "$END" ]; do
+            chunk_end=$(date -u -d "$cur + $((CHUNK - 1)) days" +%F)
+            if [ "$chunk_end" \> "$END" ]; then chunk_end="$END"; fi
+            echo "---- CA chunk $cur -> $chunk_end ----"
+            HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" -X POST \
+              "$BASE/functions/v1/rapid-processor" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+              -H "Content-Type: application/json" \
+              -d "{\"startDate\": \"$cur\", \"endDate\": \"$chunk_end\"}" --max-time 300)
+            echo "HTTP $HTTP_CODE"; cat response.json | jq . 2>/dev/null || cat response.json
+            if [ "$HTTP_CODE" != "200" ] || ! jq -e '.success == true' response.json > /dev/null 2>&1; then
+              echo "::error::CA chunk $cur -> $chunk_end failed (HTTP $HTTP_CODE)"; FAILED=1
+            fi
+            cur=$(date -u -d "$chunk_end + 1 day" +%F)
+          done
+          [ "$FAILED" = "0" ] || { echo "::error::CA sync had failures"; exit 1; }
+
+      - name: Reapply Budget Prévisionnel targets (rapid-processor overwrites them)
+        run: |
+          DAYS="${{ github.event.inputs.ca_days || '7' }}"
+          BASE="${{ secrets.SUPABASE_URL }}"; BASE="${BASE%/}"
+          SITE_ID="00000000-0000-0000-0000-000000000001"
+          ANON="${{ secrets.SUPABASE_ANON_KEY }}"
+          END=$(date -u +%F); START=$(date -u -d "$END - $((DAYS - 1)) days" +%F)
+          cur="$START"
+          while [ "$cur" \< "$END" ] || [ "$cur" = "$END" ]; do
+            TARGET=$(curl -s \
+              "$BASE/rest/v1/budgets?site_id=eq.$SITE_ID&date=eq.$cur&select=target" \
+              -H "apikey: $ANON" -H "Authorization: Bearer $ANON" \
+              | jq -r '.[0].target // empty')
+            if [ -n "$TARGET" ]; then
+              curl -s -o /dev/null -w "  $cur -> target $TARGET (HTTP %{http_code})\n" -X PATCH \
+                "$BASE/rest/v1/sales?site_id=eq.$SITE_ID&date=eq.$cur&period=eq.day" \
+                -H "apikey: $ANON" -H "Authorization: Bearer $ANON" \
+                -H "Content-Type: application/json" -H "Prefer: return=minimal" \
+                -d "{\"target\": $TARGET}"
+            fi
+            cur=$(date -u -d "$cur + 1 day" +%F)
+          done
+
+      - name: Sync GX (sync-gx, chunked by 10 days)
+        run: |
+          DAYS="${{ github.event.inputs.gx_days || '14' }}"
+          BASE="${{ secrets.SUPABASE_URL }}"; BASE="${BASE%/}"
+          CHUNK=10
+          END=$(date -u +%F); START=$(date -u -d "$END - $((DAYS - 1)) days" +%F)
+          echo "GX window: $START -> $END"
+          FAILED=0; cur="$START"
+          while [ "$cur" \< "$END" ] || [ "$cur" = "$END" ]; do
+            chunk_end=$(date -u -d "$cur + $((CHUNK - 1)) days" +%F)
+            if [ "$chunk_end" \> "$END" ]; then chunk_end="$END"; fi
+            echo "---- GX chunk $cur -> $chunk_end ----"
+            HTTP_CODE=$(curl -s -o response.json -w "%{http_code}" -X POST \
+              "$BASE/functions/v1/sync-gx" \
+              -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+              -H "Content-Type: application/json" \
+              -d "{\"startDate\": \"$cur\", \"endDate\": \"$chunk_end\"}" --max-time 300)
+            echo "HTTP $HTTP_CODE"; cat response.json | jq . 2>/dev/null || cat response.json
+            if [ "$HTTP_CODE" != "200" ] || ! jq -e '.success == true' response.json > /dev/null 2>&1; then
+              echo "::error::GX chunk $cur -> $chunk_end failed (HTTP $HTTP_CODE)"; FAILED=1
+            fi
+            cur=$(date -u -d "$chunk_end + 1 day" +%F)
+          done
+          [ "$FAILED" = "0" ] || { echo "::error::GX sync had failures"; exit 1; }
+          echo "Sync OK"
