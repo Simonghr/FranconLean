@@ -345,7 +345,7 @@ export default function CadencierPage() {
                 onDragStart={() => setDragId(p.id)}
                 onDragOver={e => e.preventDefault()}
                 onDrop={() => handleDrop(p.id)}
-                className={`flex items-center gap-3 px-3 py-2.5 border-b border-slate-700/40 hover:bg-slate-700/20 transition-colors ${dragId === p.id ? "opacity-40" : ""}`}
+                className={`flex items-center gap-3 flex-wrap px-3 py-2.5 border-b border-slate-700/40 hover:bg-slate-700/20 transition-colors ${dragId === p.id ? "opacity-40" : ""}`}
               >
                 {groupBy === "zone" && (
                   <span className="text-slate-600 cursor-grab active:cursor-grabbing flex-shrink-0">
@@ -371,7 +371,7 @@ export default function CadencierPage() {
                   list="unit-list"
                   defaultValue={p.unit ?? ""}
                   onBlur={e => { const v = e.target.value.trim() || null; if (v !== p.unit) patchProduct(p.id, { unit: v }) }}
-                  className="w-20 bg-transparent text-xs text-slate-400 border-b border-transparent hover:border-slate-600 focus:border-cyan-500 focus:outline-none text-right hidden sm:block"
+                  className="w-20 bg-transparent text-xs text-slate-400 border-b border-slate-700/60 sm:border-transparent hover:border-slate-600 focus:border-cyan-500 focus:outline-none text-right"
                   placeholder="unité"
                   title="Unité de comptage"
                 />
@@ -380,7 +380,7 @@ export default function CadencierPage() {
                   list="zone-list"
                   defaultValue={p.zone ?? ""}
                   onBlur={e => { const v = e.target.value.trim() || null; if (v !== p.zone) patchProduct(p.id, { zone: v }) }}
-                  className="w-24 bg-transparent text-xs text-slate-400 border-b border-transparent hover:border-slate-600 focus:border-cyan-500 focus:outline-none text-right hidden sm:block"
+                  className="w-24 bg-transparent text-xs text-slate-400 border-b border-slate-700/60 sm:border-transparent hover:border-slate-600 focus:border-cyan-500 focus:outline-none text-right"
                   placeholder="+ zone"
                 />
 
@@ -445,14 +445,10 @@ export default function CadencierPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Zone</Label>
-                <select
-                  value={addForm.zone}
+                <Input list="zone-list" value={addForm.zone}
                   onChange={e => setAddForm(f => ({ ...f, zone: e.target.value }))}
-                  className="w-full text-sm px-3 py-2 rounded-lg border bg-slate-800 text-slate-200 border-slate-700 focus:outline-none focus:border-cyan-500"
-                >
-                  <option value="">Sans zone</option>
-                  {zones.map(z => <option key={z} value={z}>{z}</option>)}
-                </select>
+                  placeholder="Choisir ou saisir une nouvelle zone…" />
+                <p className="text-[11px] text-slate-500">Laissez vide pour « sans zone », ou tapez un nom pour créer une nouvelle zone.</p>
               </div>
               <div className="space-y-1.5">
                 <Label>Unité de comptage</Label>
