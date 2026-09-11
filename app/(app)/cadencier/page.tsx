@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
-import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck } from "lucide-react"
+import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck, ShoppingCart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -233,6 +233,11 @@ export default function CadencierPage() {
           <Link href="/cadencier/reception">
             <Button variant="outline" size="sm">
               <Truck className="w-4 h-4 mr-1.5" /> Réceptions
+            </Button>
+          </Link>
+          <Link href="/cadencier/ventes">
+            <Button variant="outline" size="sm">
+              <ShoppingCart className="w-4 h-4 mr-1.5" /> Ventes
             </Button>
           </Link>
           <Link href="/cadencier/historique">

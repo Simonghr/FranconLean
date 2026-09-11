@@ -235,3 +235,36 @@ export interface CountLine {
   product_id: string
   quantity: number | null
 }
+
+export interface RollerAlias {
+  id: string
+  site_id: string
+  roller_name: string
+  product_id: string | null
+  deductible: boolean
+  created_at: string
+}
+
+export type SalesImportStatus = 'draft' | 'applied'
+
+export interface SalesImport {
+  id: string
+  site_id: string
+  label: string | null
+  period_date: string | null
+  status: SalesImportStatus
+  source_file: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface SalesLine {
+  id: string
+  import_id: string
+  roller_name: string
+  category: string | null
+  qty_sold: number | null
+  product_id: string | null
+  deductible: boolean
+  created_at: string
+}
