@@ -183,6 +183,35 @@ export interface Product {
   current_stock: number | null
   temporary: boolean
   unit: string | null
+  stock: number | null
+  created_at: string
+}
+
+export type DeliveryStatus = 'draft' | 'validated'
+
+export interface Delivery {
+  id: string
+  site_id: string
+  supplier: string | null
+  delivery_date: string | null
+  invoice_number: string | null
+  status: DeliveryStatus
+  source_file: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface DeliveryLine {
+  id: string
+  delivery_id: string
+  product_id: string | null
+  raw_label: string | null
+  raw_ref: string | null
+  raw_qty: number | null
+  raw_pack: number | null
+  qty: number | null
+  unit_price: number | null
+  ignored: boolean
   created_at: string
 }
 

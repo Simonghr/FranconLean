@@ -13,7 +13,7 @@ export async function getAll(site_id: string): Promise<Product[]> {
 
 export async function create(
   data: Pick<Product, 'site_id' | 'supplier' | 'name'> &
-    Partial<Pick<Product, 'price' | 'pack_size' | 'target_stock' | 'zone' | 'note' | 'position' | 'current_stock' | 'temporary' | 'unit'>>
+    Partial<Pick<Product, 'price' | 'pack_size' | 'target_stock' | 'zone' | 'note' | 'position' | 'current_stock' | 'temporary' | 'unit' | 'stock'>>
 ): Promise<Product> {
   const { data: result, error } = await supabase.from('products').insert(data).select().single()
   if (error) throw error
@@ -22,7 +22,7 @@ export async function create(
 
 export async function update(
   id: string,
-  data: Partial<Pick<Product, 'supplier' | 'name' | 'price' | 'pack_size' | 'target_stock' | 'zone' | 'note' | 'position' | 'current_stock' | 'temporary' | 'unit'>>
+  data: Partial<Pick<Product, 'supplier' | 'name' | 'price' | 'pack_size' | 'target_stock' | 'zone' | 'note' | 'position' | 'current_stock' | 'temporary' | 'unit' | 'stock'>>
 ): Promise<Product> {
   const { data: result, error } = await supabase.from('products').update(data).eq('id', id).select().single()
   if (error) throw error

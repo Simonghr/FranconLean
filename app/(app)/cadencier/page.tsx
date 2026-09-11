@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
-import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History } from "lucide-react"
+import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -230,6 +230,11 @@ export default function CadencierPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <Link href="/cadencier/reception">
+            <Button variant="outline" size="sm">
+              <Truck className="w-4 h-4 mr-1.5" /> Réceptions
+            </Button>
+          </Link>
           <Link href="/cadencier/historique">
             <Button variant="outline" size="sm">
               <History className="w-4 h-4 mr-1.5" /> Historique
