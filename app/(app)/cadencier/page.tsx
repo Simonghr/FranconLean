@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
-import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck, ShoppingCart, ChefHat, Pencil } from "lucide-react"
+import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck, ShoppingCart, ChefHat, Pencil, ChevronUp, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -201,6 +201,26 @@ export default function CadencierPage() {
     } catch (e) { console.error(e) }
   }
 
+  // Move a product up/down among the products of its own group (touch-friendly
+  // alternative to drag & drop, which native HTML5 DnD can't do on tablets).
+  const moveProduct = async (p: Product, dir: -1 | 1) => {
+    const key = (x: Product) => (groupBy === "zone" ? (x.zone || NO_ZONE) : x.supplier)
+    const group = [...products].filter(x => key(x) === key(p)).sort((a, b) => a.position - b.position)
+    const idx = group.findIndex(x => x.id === p.id)
+    const swap = group[idx + dir]
+    if (!swap) return
+    const pPos = p.position, sPos = swap.position
+    setProducts(prev => prev.map(x =>
+      x.id === p.id ? { ...x, position: sPos } : x.id === swap.id ? { ...x, position: pPos } : x
+    ))
+    try {
+      await Promise.all([
+        productsRepo.update(p.id, { position: sPos }),
+        productsRepo.update(swap.id, { position: pPos }),
+      ])
+    } catch (e) { console.error(e) }
+  }
+
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase()
     return products
@@ -361,15 +381,25 @@ export default function CadencierPage() {
             {items.map(p => (
               <li
                 key={p.id}
-                draggable={groupBy === "zone"}
-                onDragStart={() => setDragId(p.id)}
-                onDragOver={e => e.preventDefault()}
+                onDragOver={e => { if (dragId) e.preventDefault() }}
                 onDrop={() => handleDrop(p.id)}
                 className={`flex items-center gap-3 flex-wrap px-3 py-2.5 border-b border-slate-700/40 hover:bg-slate-700/20 transition-colors ${dragId === p.id ? "opacity-40" : ""}`}
               >
                 {groupBy === "zone" && (
-                  <span className="text-slate-600 cursor-grab active:cursor-grabbing flex-shrink-0">
-                    <GripVertical className="w-4 h-4" />
+                  <span className="flex items-center flex-shrink-0">
+                    <span
+                      draggable
+                      onDragStart={() => setDragId(p.id)}
+                      onDragEnd={() => setDragId(null)}
+                      title="Glisser pour déplacer"
+                      className="text-slate-600 hover:text-slate-300 cursor-grab active:cursor-grabbing touch-none"
+                    >
+                      <GripVertical className="w-4 h-4" />
+                    </span>
+                    <span className="flex flex-col -my-1">
+                      <button onClick={() => moveProduct(p, -1)} title="Monter" className="text-slate-600 hover:text-cyan-400 leading-none"><ChevronUp className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => moveProduct(p, 1)} title="Descendre" className="text-slate-600 hover:text-cyan-400 leading-none"><ChevronDown className="w-3.5 h-3.5" /></button>
+                    </span>
                   </span>
                 )}
 
