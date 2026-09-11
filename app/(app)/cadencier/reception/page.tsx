@@ -60,8 +60,21 @@ export default function ReceptionPage() {
   const openDelivery = async (d: Delivery) => {
     setSelected(d)
     setLoadingDetail(true)
-    try { setLines(await deliveriesRepo.getLines(d.id)) }
-    catch (e) { console.error(e) } finally { setLoadingDetail(false) }
+    try {
+      const raw = await deliveriesRepo.getLines(d.id)
+      // Derive a received qty (colis × colisage) for any line that has none yet.
+      const fixed = raw.map(l =>
+        l.qty == null && l.raw_qty != null
+          ? { ...l, qty: l.raw_pack ? l.raw_qty * l.raw_pack : l.raw_qty }
+          : l
+      )
+      setLines(fixed)
+      if (d.status !== "validated") {
+        raw.forEach((l, i) => {
+          if (l.qty == null && fixed[i].qty != null) deliveriesRepo.updateLine(l.id, { qty: fixed[i].qty }).catch(console.error)
+        })
+      }
+    } catch (e) { console.error(e) } finally { setLoadingDetail(false) }
   }
 
   const newDelivery = async () => {
@@ -280,12 +293,12 @@ export default function ReceptionPage() {
                               </td>
                               <td className="px-2 py-2 text-right">
                                 <input defaultValue={l.raw_qty ?? ""} disabled={isValidated}
-                                  onBlur={e => { const v = parseNum(e.target.value); if (v !== (l.raw_qty ?? null)) patchQtyDriver(l, { raw_qty: v }) }}
+                                  onBlur={e => patchQtyDriver(l, { raw_qty: parseNum(e.target.value) })}
                                   className="w-12 bg-transparent text-right text-slate-300 border-b border-transparent hover:border-slate-600 focus:border-emerald-500 focus:outline-none" placeholder="—" />
                               </td>
                               <td className="px-2 py-2 text-right">
                                 <input defaultValue={l.raw_pack ?? ""} disabled={isValidated}
-                                  onBlur={e => { const v = parseNum(e.target.value); if (v !== (l.raw_pack ?? null)) patchQtyDriver(l, { raw_pack: v }) }}
+                                  onBlur={e => patchQtyDriver(l, { raw_pack: parseNum(e.target.value) })}
                                   className="w-12 bg-transparent text-right text-slate-300 border-b border-transparent hover:border-slate-600 focus:border-emerald-500 focus:outline-none" placeholder="—" />
                               </td>
                               <td className="px-2 py-2 text-right whitespace-nowrap">
