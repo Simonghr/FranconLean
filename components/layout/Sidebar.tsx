@@ -22,7 +22,7 @@ const navItems = [
   { href: "/settings", icon: Settings, label: "Paramètres" },
 ]
 
-export function Sidebar() {
+export function Sidebar({ open = false, onClose }: { open?: boolean; onClose?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, role, signOut } = useAuth()
@@ -38,7 +38,20 @@ export function Sidebar() {
   const initial = displayName.charAt(0).toUpperCase()
 
   return (
-    <aside className="flex flex-col w-64 min-h-screen bg-slate-900 border-r border-slate-800 flex-shrink-0">
+    <>
+      {/* Mobile backdrop */}
+      <div
+        onClick={onClose}
+        className={cn(
+          "fixed inset-0 z-40 bg-black/60 md:hidden transition-opacity",
+          open ? "opacity-100" : "opacity-0 pointer-events-none"
+        )}
+      />
+    <aside className={cn(
+      "flex flex-col w-64 bg-slate-900 border-r border-slate-800 flex-shrink-0 z-50",
+      "fixed inset-y-0 left-0 h-full transform transition-transform duration-200 md:static md:h-auto md:min-h-screen md:translate-x-0",
+      open ? "translate-x-0" : "-translate-x-full"
+    )}>
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-800">
         <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
@@ -58,6 +71,7 @@ export function Sidebar() {
             <Link
               key={href}
               href={href}
+              onClick={onClose}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
                 isActive
@@ -92,5 +106,6 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+    </>
   )
 }
