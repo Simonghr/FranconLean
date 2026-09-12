@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
 import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck, ShoppingCart, ChefHat, Pencil, ChevronUp, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -35,7 +35,9 @@ export default function CadencierPage() {
   const [groupBy, setGroupBy] = useState<GroupBy>("zone")
   const [supplierFilter, setSupplierFilter] = useState<string>("all")
   const [zoneFilter, setZoneFilter] = useState<string>("all")
-  const [dragId, setDragId] = useState<string | null>(null)
+  // A ref (not state) so dragging triggers NO re-render mid-dragstart, which
+  // would mutate the dragged DOM node and freeze the browser's drag.
+  const dragIdRef = useRef<string | null>(null)
 
   // ── Saisie session ──────────────────────────────────────────────────────
   const [session, setSession] = useState<CountSession | null>(null)
@@ -180,11 +182,14 @@ export default function CadencierPage() {
   }
 
   const handleDrop = async (targetId: string) => {
-    if (!dragId || dragId === targetId) { setDragId(null); return }
+    const dragId = dragIdRef.current
+    dragIdRef.current = null
+    if (!dragId || dragId === targetId) return
+    const before = new Map(products.map(p => [p.id, p.position]))
     const ordered = [...products].sort((a, b) => a.position - b.position)
     const from = ordered.findIndex(p => p.id === dragId)
     const to = ordered.findIndex(p => p.id === targetId)
-    if (from === -1 || to === -1) { setDragId(null); return }
+    if (from === -1 || to === -1) return
     const dragged = ordered[from]
     const targetZone = ordered[to].zone ?? null
     ordered.splice(from, 1)
@@ -192,9 +197,11 @@ export default function CadencierPage() {
     const reZoned = ordered.map(p => (p.id === dragId && groupBy === "zone" ? { ...p, zone: targetZone } : p))
     const withPos = reZoned.map((p, i) => ({ ...p, position: (i + 1) * 10 }))
     setProducts(withPos)
-    setDragId(null)
     try {
-      await productsRepo.saveOrder(withPos.map(p => p.id))
+      // Only persist the rows whose position actually changed (avoids firing
+      // ~130 update requests at once, which froze the tab).
+      const changed = withPos.filter(p => before.get(p.id) !== p.position)
+      await productsRepo.savePositions(changed.map(p => ({ id: p.id, position: p.position })))
       if (groupBy === "zone" && (dragged.zone ?? null) !== targetZone) {
         await productsRepo.update(dragId, { zone: targetZone })
       }
@@ -381,16 +388,16 @@ export default function CadencierPage() {
             {items.map(p => (
               <li
                 key={p.id}
-                onDragOver={e => { if (dragId) e.preventDefault() }}
+                onDragOver={e => { if (dragIdRef.current) e.preventDefault() }}
                 onDrop={() => handleDrop(p.id)}
-                className={`flex items-center gap-3 flex-wrap px-3 py-2.5 border-b border-slate-700/40 hover:bg-slate-700/20 transition-colors ${dragId === p.id ? "opacity-40" : ""}`}
+                className="flex items-center gap-3 flex-wrap px-3 py-2.5 border-b border-slate-700/40 hover:bg-slate-700/20 transition-colors"
               >
                 {groupBy === "zone" && (
                   <span className="flex items-center flex-shrink-0">
                     <span
                       draggable
-                      onDragStart={() => setDragId(p.id)}
-                      onDragEnd={() => setDragId(null)}
+                      onDragStart={e => { dragIdRef.current = p.id; e.dataTransfer.effectAllowed = "move" }}
+                      onDragEnd={() => { dragIdRef.current = null }}
                       title="Glisser pour déplacer"
                       className="text-slate-600 hover:text-slate-300 cursor-grab active:cursor-grabbing touch-none"
                     >

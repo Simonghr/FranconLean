@@ -41,6 +41,13 @@ export async function saveOrder(ids: string[]): Promise<void> {
   )
 }
 
+// Persist explicit positions for only the rows that changed (cheap reorder).
+export async function savePositions(items: { id: string; position: number }[]): Promise<void> {
+  await Promise.all(
+    items.map(x => supabase.from('products').update({ position: x.position }).eq('id', x.id))
+  )
+}
+
 // ── Counting sessions ──────────────────────────────────────────────────────
 
 // Most recent draft (in-progress) session for a site, or null.
