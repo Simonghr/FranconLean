@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { isPathAllowed } from '@/lib/access'
+import { isPathAllowed, landingPath } from '@/lib/access'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -42,9 +42,10 @@ export async function updateSession(request: NextRequest) {
 
   if (user && !isPublic && !isLogin) {
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-    if (!isPathAllowed(profile?.role ?? null, pathname)) {
+    const role = (profile?.role as import('@/lib/types').UserRole) ?? null
+    if (!isPathAllowed(role, pathname)) {
       const url = request.nextUrl.clone()
-      url.pathname = '/ameliorations'
+      url.pathname = landingPath(role)
       return NextResponse.redirect(url)
     }
   }

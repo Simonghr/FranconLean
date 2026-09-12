@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import * as productsRepo from "@/lib/repositories/products"
 import { useSite } from "@/lib/context/SiteContext"
+import { useAuth } from "@/lib/context/AuthContext"
 import type { Product, CountSession } from "@/lib/types"
 
 const NO_ZONE = "Sans zone"
@@ -29,6 +30,9 @@ type GroupBy = "zone" | "supplier"
 
 export default function CadencierPage() {
   const { siteId: SITE_ID } = useSite()
+  const { role } = useAuth()
+  // Staff = counting only: no reorder, no add/edit/delete, no management sub-pages.
+  const canManage = role !== "staff"
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -292,6 +296,7 @@ export default function CadencierPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {canManage && <>
           <Link href="/cadencier/commandes">
             <Button variant="outline" size="sm">
               <ClipboardCheck className="w-4 h-4 mr-1.5" /> Commandes
@@ -324,6 +329,7 @@ export default function CadencierPage() {
           }}>
             <Plus className="w-4 h-4 mr-1.5" /> Produit
           </Button>
+          </>}
           <Button size="sm" variant="outline" onClick={() => { setForm({ ...nowParts(), first: "", last: "" }); setNewOpen(true) }}>
             <FilePlus2 className="w-4 h-4 mr-1.5" /> Nouvelle saisie
           </Button>
@@ -395,14 +401,14 @@ export default function CadencierPage() {
         </div>
       )}
 
-      {groupBy === "zone" && (
+      {groupBy === "zone" && canManage && (
         <p className="text-xs text-slate-500 -mt-2">
           Glissez <GripVertical className="w-3 h-3 inline" /> pour réordonner · déposez une ligne dans une autre zone pour l'y déplacer · cochez plusieurs produits pour les déplacer ensemble.
         </p>
       )}
 
       {/* Multi-selection action bar */}
-      {groupBy === "zone" && selected.size > 0 && (
+      {canManage && groupBy === "zone" && selected.size > 0 && (
         <div className="flex items-center gap-3 flex-wrap bg-cyan-500/10 border border-cyan-500/40 rounded-xl px-4 py-2.5 text-sm sticky top-2 z-20 shadow-lg">
           <span className="text-cyan-200 font-semibold">{selected.size} produit{selected.size > 1 ? "s" : ""} sélectionné{selected.size > 1 ? "s" : ""}</span>
           <label className="flex items-center gap-2 text-slate-300">
@@ -435,11 +441,11 @@ export default function CadencierPage() {
                 onDrop={() => handleDrop(p.id)}
                 className={`flex items-center gap-3 flex-wrap px-3 py-2.5 border-b border-slate-700/40 hover:bg-slate-700/20 transition-colors ${selected.has(p.id) ? "bg-cyan-500/10" : ""}`}
               >
-                {groupBy === "zone" && (
+                {canManage && groupBy === "zone" && (
                   <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)}
                     title="Sélectionner" className="w-4 h-4 accent-cyan-500 flex-shrink-0" />
                 )}
-                {groupBy === "zone" && (
+                {canManage && groupBy === "zone" && (
                   <span className="flex items-center flex-shrink-0">
                     <span
                       draggable
@@ -473,22 +479,28 @@ export default function CadencierPage() {
 
                 {/* Controls — wrap to their own line under the name on mobile */}
                 <div className="flex items-center gap-2 basis-full sm:basis-auto justify-end">
-                  <input
-                    list="unit-list"
-                    defaultValue={p.unit ?? ""}
-                    onBlur={e => { const v = e.target.value.trim() || null; if (v !== p.unit) patchProduct(p.id, { unit: v }) }}
-                    className="w-16 bg-transparent text-xs text-slate-400 border-b border-slate-700/60 sm:border-transparent hover:border-slate-600 focus:border-cyan-500 focus:outline-none text-right"
-                    placeholder="unité"
-                    title="Unité de comptage"
-                  />
+                  {canManage ? (
+                    <input
+                      list="unit-list"
+                      defaultValue={p.unit ?? ""}
+                      onBlur={e => { const v = e.target.value.trim() || null; if (v !== p.unit) patchProduct(p.id, { unit: v }) }}
+                      className="w-16 bg-transparent text-xs text-slate-400 border-b border-slate-700/60 sm:border-transparent hover:border-slate-600 focus:border-cyan-500 focus:outline-none text-right"
+                      placeholder="unité"
+                      title="Unité de comptage"
+                    />
+                  ) : (
+                    <span className="w-16 text-xs text-slate-500 text-right truncate">{p.unit ?? ""}</span>
+                  )}
 
-                  <input
-                    list="zone-list"
-                    defaultValue={p.zone ?? ""}
-                    onBlur={e => { const v = e.target.value.trim() || null; if (v !== p.zone) patchProduct(p.id, { zone: v }) }}
-                    className="w-20 bg-transparent text-xs text-slate-400 border-b border-slate-700/60 sm:border-transparent hover:border-slate-600 focus:border-cyan-500 focus:outline-none text-right"
-                    placeholder="+ zone"
-                  />
+                  {canManage && (
+                    <input
+                      list="zone-list"
+                      defaultValue={p.zone ?? ""}
+                      onBlur={e => { const v = e.target.value.trim() || null; if (v !== p.zone) patchProduct(p.id, { zone: v }) }}
+                      className="w-20 bg-transparent text-xs text-slate-400 border-b border-slate-700/60 sm:border-transparent hover:border-slate-600 focus:border-cyan-500 focus:outline-none text-right"
+                      placeholder="+ zone"
+                    />
+                  )}
 
                   {/* Quantity */}
                   <input
@@ -506,12 +518,16 @@ export default function CadencierPage() {
                     placeholder="Qté"
                   />
 
-                  <button onClick={() => openEdit(p)} title="Modifier le produit" className="text-slate-600 hover:text-cyan-400 transition-colors flex-shrink-0">
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => deleteProduct(p)} className="text-slate-600 hover:text-red-400 transition-colors flex-shrink-0">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {canManage && (
+                    <button onClick={() => openEdit(p)} title="Modifier le produit" className="text-slate-600 hover:text-cyan-400 transition-colors flex-shrink-0">
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  )}
+                  {canManage && (
+                    <button onClick={() => deleteProduct(p)} className="text-slate-600 hover:text-red-400 transition-colors flex-shrink-0">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </li>
             ))}
