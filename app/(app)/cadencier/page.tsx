@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
-import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck, ShoppingCart, ChefHat, Pencil, ChevronUp, ChevronDown } from "lucide-react"
+import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck, ShoppingCart, ChefHat, Pencil, ChevronUp, ChevronDown, ClipboardCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -51,7 +51,7 @@ export default function CadencierPage() {
   const [form, setForm] = useState(() => ({ ...nowParts(), first: "", last: "" }))
   const [addOpen, setAddOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
-  const [addForm, setAddForm] = useState({ name: "", supplier: "", zone: "", unit: "", temporary: false })
+  const [addForm, setAddForm] = useState({ name: "", supplier: "", zone: "", unit: "", target: "", temporary: false })
 
   useEffect(() => {
     let alive = true
@@ -147,7 +147,7 @@ export default function CadencierPage() {
     setEditId(p.id)
     setAddForm({
       name: p.name, supplier: p.supplier ?? "", zone: p.zone ?? "",
-      unit: p.unit ?? "", temporary: p.temporary,
+      unit: p.unit ?? "", target: p.target_stock != null ? String(p.target_stock) : "", temporary: p.temporary,
     })
     setAddOpen(true)
   }
@@ -155,11 +155,13 @@ export default function CadencierPage() {
   const submitAddProduct = async () => {
     const name = addForm.name.trim()
     if (!name) return
+    const t = addForm.target.trim().replace(",", ".")
     const patch = {
       name,
       supplier: addForm.supplier.trim() || "Divers",
       zone: addForm.zone.trim() || null,
       unit: addForm.unit.trim() || null,
+      target_stock: t === "" ? null : (isNaN(Number(t)) ? null : Number(t)),
       temporary: addForm.temporary,
     }
     try {
@@ -290,6 +292,11 @@ export default function CadencierPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <Link href="/cadencier/commandes">
+            <Button variant="outline" size="sm">
+              <ClipboardCheck className="w-4 h-4 mr-1.5" /> Commandes
+            </Button>
+          </Link>
           <Link href="/cadencier/reception">
             <Button variant="outline" size="sm">
               <Truck className="w-4 h-4 mr-1.5" /> Réceptions
@@ -312,7 +319,7 @@ export default function CadencierPage() {
           </Link>
           <Button variant="outline" size="sm" onClick={() => {
             setEditId(null)
-            setAddForm({ name: "", supplier: suppliers[0] ?? "", zone: "", unit: "", temporary: false })
+            setAddForm({ name: "", supplier: suppliers[0] ?? "", zone: "", unit: "", target: "", temporary: false })
             setAddOpen(true)
           }}>
             <Plus className="w-4 h-4 mr-1.5" /> Produit
@@ -550,11 +557,20 @@ export default function CadencierPage() {
                   placeholder="Choisir ou saisir une nouvelle zone…" />
                 <p className="text-[11px] text-slate-500">Laissez vide pour « sans zone », ou tapez un nom pour créer une nouvelle zone.</p>
               </div>
-              <div className="space-y-1.5">
-                <Label>Unité de comptage</Label>
-                <Input list="unit-list" value={addForm.unit}
-                  onChange={e => setAddForm(f => ({ ...f, unit: e.target.value }))}
-                  placeholder="ex. bouteille, pièce, kg…" />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Unité de comptage</Label>
+                  <Input list="unit-list" value={addForm.unit}
+                    onChange={e => setAddForm(f => ({ ...f, unit: e.target.value }))}
+                    placeholder="ex. bouteille, pièce…" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Stock cible</Label>
+                  <Input value={addForm.target} inputMode="decimal"
+                    onChange={e => setAddForm(f => ({ ...f, target: e.target.value }))}
+                    placeholder="ex. 24" />
+                  <p className="text-[11px] text-slate-500">Quantité souhaitée en rayon (pour les commandes).</p>
+                </div>
               </div>
               <label className="flex items-center gap-2.5 cursor-pointer pt-1">
                 <input type="checkbox" checked={addForm.temporary}

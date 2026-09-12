@@ -102,6 +102,19 @@ export async function deleteSession(id: string): Promise<void> {
   if (error) throw error
 }
 
+// Most recent validated count quantity per product (newest session wins).
+export async function getLatestCounts(site_id: string): Promise<Record<string, number>> {
+  const sessions = await listSessions(site_id, 'validated') // already newest-first
+  const result: Record<string, number> = {}
+  for (const s of sessions.slice(0, 15)) {
+    const lines = await getLines(s.id)
+    for (const l of lines) {
+      if (!(l.product_id in result) && l.quantity != null) result[l.product_id] = l.quantity
+    }
+  }
+  return result
+}
+
 export async function getLines(session_id: string): Promise<CountLine[]> {
   const { data, error } = await supabase.from('count_lines').select('*').eq('session_id', session_id)
   if (error) throw error
