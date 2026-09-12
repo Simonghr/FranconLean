@@ -38,6 +38,10 @@ export default function CadencierPage() {
   // A ref (not state) so dragging triggers NO re-render mid-dragstart, which
   // would mutate the dragged DOM node and freeze the browser's drag.
   const dragIdRef = useRef<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const toggleSelect = (id: string) =>
+    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const clearSelect = () => setSelected(new Set())
 
   // ── Saisie session ──────────────────────────────────────────────────────
   const [session, setSession] = useState<CountSession | null>(null)
@@ -184,28 +188,43 @@ export default function CadencierPage() {
   const handleDrop = async (targetId: string) => {
     const dragId = dragIdRef.current
     dragIdRef.current = null
-    if (!dragId || dragId === targetId) return
+    if (!dragId) return
+    // Move the whole selection if the dragged row is part of it; else just it.
+    const moving = selected.has(dragId) && selected.size > 1 ? [...selected] : [dragId]
+    if (moving.includes(targetId)) return
     const before = new Map(products.map(p => [p.id, p.position]))
     const ordered = [...products].sort((a, b) => a.position - b.position)
-    const from = ordered.findIndex(p => p.id === dragId)
-    const to = ordered.findIndex(p => p.id === targetId)
-    if (from === -1 || to === -1) return
-    const dragged = ordered[from]
-    const targetZone = ordered[to].zone ?? null
-    ordered.splice(from, 1)
-    ordered.splice(to, 0, dragged)
-    const reZoned = ordered.map(p => (p.id === dragId && groupBy === "zone" ? { ...p, zone: targetZone } : p))
+    if (!ordered.some(p => p.id === targetId)) return
+    const targetZone = ordered.find(p => p.id === targetId)!.zone ?? null
+    const movingSet = new Set(moving)
+    const block = ordered.filter(p => movingSet.has(p.id)) // keeps their relative order
+    const rest = ordered.filter(p => !movingSet.has(p.id))
+    const insertAt = rest.findIndex(p => p.id === targetId)
+    if (insertAt === -1) return
+    const newOrder = [...rest.slice(0, insertAt), ...block, ...rest.slice(insertAt)]
+    const reZoned = newOrder.map(p => (movingSet.has(p.id) && groupBy === "zone" ? { ...p, zone: targetZone } : p))
     const withPos = reZoned.map((p, i) => ({ ...p, position: (i + 1) * 10 }))
     setProducts(withPos)
+    clearSelect()
     try {
-      // Only persist the rows whose position actually changed (avoids firing
-      // ~130 update requests at once, which froze the tab).
+      // Only persist the rows whose position actually changed.
       const changed = withPos.filter(p => before.get(p.id) !== p.position)
       await productsRepo.savePositions(changed.map(p => ({ id: p.id, position: p.position })))
-      if (groupBy === "zone" && (dragged.zone ?? null) !== targetZone) {
-        await productsRepo.update(dragId, { zone: targetZone })
+      if (groupBy === "zone") {
+        const zoneChanges = block.filter(p => (p.zone ?? null) !== targetZone)
+        await Promise.all(zoneChanges.map(p => productsRepo.update(p.id, { zone: targetZone })))
       }
     } catch (e) { console.error(e) }
+  }
+
+  // Bulk-reassign the zone of every selected product.
+  const moveSelectedToZone = async (zone: string) => {
+    const ids = [...selected]
+    if (!ids.length) return
+    setProducts(prev => prev.map(p => selected.has(p.id) ? { ...p, zone } : p))
+    clearSelect()
+    try { await Promise.all(ids.map(id => productsRepo.update(id, { zone }))) }
+    catch (e) { console.error(e) }
   }
 
   // Move a product up/down among the products of its own group (touch-friendly
@@ -371,8 +390,25 @@ export default function CadencierPage() {
 
       {groupBy === "zone" && (
         <p className="text-xs text-slate-500 -mt-2">
-          Glissez <GripVertical className="w-3 h-3 inline" /> pour réordonner · déposez une ligne dans une autre zone pour l'y déplacer.
+          Glissez <GripVertical className="w-3 h-3 inline" /> pour réordonner · déposez une ligne dans une autre zone pour l'y déplacer · cochez plusieurs produits pour les déplacer ensemble.
         </p>
+      )}
+
+      {/* Multi-selection action bar */}
+      {groupBy === "zone" && selected.size > 0 && (
+        <div className="flex items-center gap-3 flex-wrap bg-cyan-500/10 border border-cyan-500/40 rounded-xl px-4 py-2.5 text-sm sticky top-2 z-20 shadow-lg">
+          <span className="text-cyan-200 font-semibold">{selected.size} produit{selected.size > 1 ? "s" : ""} sélectionné{selected.size > 1 ? "s" : ""}</span>
+          <label className="flex items-center gap-2 text-slate-300">
+            Déplacer vers
+            <select defaultValue="" onChange={e => { if (e.target.value) { void moveSelectedToZone(e.target.value); e.currentTarget.value = "" } }}
+              className="text-sm px-2.5 py-1.5 rounded-lg border bg-slate-800 text-slate-200 border-slate-700 focus:outline-none focus:border-cyan-500">
+              <option value="" disabled>Choisir une zone…</option>
+              {zoneOptions.map(z => <option key={z} value={z}>{z}</option>)}
+            </select>
+          </label>
+          <span className="text-xs text-slate-400 hidden sm:inline">ou glissez un produit sélectionné pour déplacer tout le bloc</span>
+          <button onClick={clearSelect} className="ml-auto text-slate-400 hover:text-white">Désélectionner</button>
+        </div>
       )}
 
       {/* Groups */}
@@ -390,8 +426,12 @@ export default function CadencierPage() {
                 key={p.id}
                 onDragOver={e => { if (dragIdRef.current) e.preventDefault() }}
                 onDrop={() => handleDrop(p.id)}
-                className="flex items-center gap-3 flex-wrap px-3 py-2.5 border-b border-slate-700/40 hover:bg-slate-700/20 transition-colors"
+                className={`flex items-center gap-3 flex-wrap px-3 py-2.5 border-b border-slate-700/40 hover:bg-slate-700/20 transition-colors ${selected.has(p.id) ? "bg-cyan-500/10" : ""}`}
               >
+                {groupBy === "zone" && (
+                  <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)}
+                    title="Sélectionner" className="w-4 h-4 accent-cyan-500 flex-shrink-0" />
+                )}
                 {groupBy === "zone" && (
                   <span className="flex items-center flex-shrink-0">
                     <span
