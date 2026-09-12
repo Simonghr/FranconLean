@@ -457,8 +457,8 @@ export default function CadencierPage() {
                   </span>
                 )}
 
-                <div className="flex-1 min-w-0">
-                  <div className="text-slate-100 truncate flex items-center gap-1.5">
+                <div className="flex-1 min-w-[120px]">
+                  <div className="text-slate-100 break-words flex items-center gap-1.5">
                     {p.name}
                     {p.temporary && (
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 flex-shrink-0">
@@ -471,45 +471,48 @@ export default function CadencierPage() {
                   </div>
                 </div>
 
-                <input
-                  list="unit-list"
-                  defaultValue={p.unit ?? ""}
-                  onBlur={e => { const v = e.target.value.trim() || null; if (v !== p.unit) patchProduct(p.id, { unit: v }) }}
-                  className="w-20 bg-transparent text-xs text-slate-400 border-b border-slate-700/60 sm:border-transparent hover:border-slate-600 focus:border-cyan-500 focus:outline-none text-right"
-                  placeholder="unité"
-                  title="Unité de comptage"
-                />
+                {/* Controls — wrap to their own line under the name on mobile */}
+                <div className="flex items-center gap-2 basis-full sm:basis-auto justify-end">
+                  <input
+                    list="unit-list"
+                    defaultValue={p.unit ?? ""}
+                    onBlur={e => { const v = e.target.value.trim() || null; if (v !== p.unit) patchProduct(p.id, { unit: v }) }}
+                    className="w-16 bg-transparent text-xs text-slate-400 border-b border-slate-700/60 sm:border-transparent hover:border-slate-600 focus:border-cyan-500 focus:outline-none text-right"
+                    placeholder="unité"
+                    title="Unité de comptage"
+                  />
 
-                <input
-                  list="zone-list"
-                  defaultValue={p.zone ?? ""}
-                  onBlur={e => { const v = e.target.value.trim() || null; if (v !== p.zone) patchProduct(p.id, { zone: v }) }}
-                  className="w-24 bg-transparent text-xs text-slate-400 border-b border-slate-700/60 sm:border-transparent hover:border-slate-600 focus:border-cyan-500 focus:outline-none text-right"
-                  placeholder="+ zone"
-                />
+                  <input
+                    list="zone-list"
+                    defaultValue={p.zone ?? ""}
+                    onBlur={e => { const v = e.target.value.trim() || null; if (v !== p.zone) patchProduct(p.id, { zone: v }) }}
+                    className="w-20 bg-transparent text-xs text-slate-400 border-b border-slate-700/60 sm:border-transparent hover:border-slate-600 focus:border-cyan-500 focus:outline-none text-right"
+                    placeholder="+ zone"
+                  />
 
-                {/* Quantity */}
-                <input
-                  key={`${p.id}-${qty[p.id] ?? "e"}`}
-                  defaultValue={qty[p.id] ?? ""}
-                  disabled={!active}
-                  onBlur={e => { const v = parseNum(e.target.value); if (v !== (qty[p.id] ?? null)) setQuantity(p.id, v) }}
-                  inputMode="decimal"
-                  title={active ? "" : "Démarrez une saisie pour renseigner la quantité"}
-                  className={`w-20 flex-shrink-0 text-center rounded-md px-2 py-1.5 font-semibold border focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
-                    qty[p.id] == null
-                      ? "bg-slate-900 border-slate-600 text-white focus:border-cyan-500"
-                      : "bg-cyan-500/10 border-cyan-500/40 text-cyan-300 focus:border-cyan-400"
-                  }`}
-                  placeholder="Qté"
-                />
+                  {/* Quantity */}
+                  <input
+                    key={`${p.id}-${qty[p.id] ?? "e"}`}
+                    defaultValue={qty[p.id] ?? ""}
+                    disabled={!active}
+                    onBlur={e => { const v = parseNum(e.target.value); if (v !== (qty[p.id] ?? null)) setQuantity(p.id, v) }}
+                    inputMode="decimal"
+                    title={active ? "" : "Démarrez une saisie pour renseigner la quantité"}
+                    className={`w-16 flex-shrink-0 text-center rounded-md px-2 py-1.5 font-semibold border focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
+                      qty[p.id] == null
+                        ? "bg-slate-900 border-slate-600 text-white focus:border-cyan-500"
+                        : "bg-cyan-500/10 border-cyan-500/40 text-cyan-300 focus:border-cyan-400"
+                    }`}
+                    placeholder="Qté"
+                  />
 
-                <button onClick={() => openEdit(p)} title="Modifier le produit" className="text-slate-600 hover:text-cyan-400 transition-colors flex-shrink-0">
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => deleteProduct(p)} className="text-slate-600 hover:text-red-400 transition-colors flex-shrink-0">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                  <button onClick={() => openEdit(p)} title="Modifier le produit" className="text-slate-600 hover:text-cyan-400 transition-colors flex-shrink-0">
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => deleteProduct(p)} className="text-slate-600 hover:text-red-400 transition-colors flex-shrink-0">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
