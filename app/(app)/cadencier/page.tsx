@@ -522,7 +522,8 @@ export default function CadencierPage() {
                         if (nextEl) { nextEl.focus(); nextEl.select() } else e.currentTarget.blur()
                       }
                     }}
-                    inputMode="decimal"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     title={active ? "" : "Démarrez une saisie pour renseigner la quantité"}
                     className={`w-16 flex-shrink-0 text-center rounded-md px-2 py-1.5 font-semibold border focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
                       qty[p.id] == null
