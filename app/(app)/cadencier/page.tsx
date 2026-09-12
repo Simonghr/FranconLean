@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
-import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck, ShoppingCart, ChefHat, Pencil, ChevronUp, ChevronDown, ClipboardCheck } from "lucide-react"
+import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck, ShoppingCart, ChefHat, Pencil, ChevronUp, ChevronDown, ClipboardCheck, CornerDownLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -281,6 +281,11 @@ export default function CadencierPage() {
   const active = !!session
   // Product ids in display order (across all groups), for Enter-to-next-cell.
   const orderedIds = groups.flatMap(([, items]) => items.map(p => p.id))
+  const focusNextQty = (currentId: string) => {
+    const idx = orderedIds.indexOf(currentId)
+    const nextEl = qtyRefs.current[orderedIds[idx + 1]]
+    if (nextEl) { nextEl.focus(); nextEl.select() }
+  }
 
   if (loading) return <div className="text-center py-20 text-slate-500">Chargement…</div>
 
@@ -517,9 +522,7 @@ export default function CadencierPage() {
                       if (e.key === "Enter") {
                         e.preventDefault()
                         const idx = orderedIds.indexOf(p.id)
-                        const next = orderedIds[idx + 1]
-                        const nextEl = next ? qtyRefs.current[next] : null
-                        if (nextEl) { nextEl.focus(); nextEl.select() } else e.currentTarget.blur()
+                        if (orderedIds[idx + 1]) focusNextQty(p.id); else e.currentTarget.blur()
                       }
                     }}
                     inputMode="numeric"
@@ -532,6 +535,17 @@ export default function CadencierPage() {
                     }`}
                     placeholder="Qté"
                   />
+
+                  {active && (
+                    <button
+                      onMouseDown={e => e.preventDefault()}
+                      onClick={() => focusNextQty(p.id)}
+                      title="Quantité suivante"
+                      className="flex-shrink-0 text-slate-500 hover:text-cyan-400 transition-colors"
+                    >
+                      <CornerDownLeft className="w-5 h-5" />
+                    </button>
+                  )}
 
                   {canManage && (
                     <button onClick={() => openEdit(p)} title="Modifier le produit" className="text-slate-600 hover:text-cyan-400 transition-colors flex-shrink-0">
