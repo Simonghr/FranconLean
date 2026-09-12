@@ -42,6 +42,8 @@ export default function CadencierPage() {
   // A ref (not state) so dragging triggers NO re-render mid-dragstart, which
   // would mutate the dragged DOM node and freeze the browser's drag.
   const dragIdRef = useRef<string | null>(null)
+  // Quantity inputs, keyed by product id, to jump to the next one on Enter.
+  const qtyRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const toggleSelect = (id: string) =>
     setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
@@ -277,6 +279,8 @@ export default function CadencierPage() {
 
   const filledCount = Object.values(qty).filter(v => v != null).length
   const active = !!session
+  // Product ids in display order (across all groups), for Enter-to-next-cell.
+  const orderedIds = groups.flatMap(([, items]) => items.map(p => p.id))
 
   if (loading) return <div className="text-center py-20 text-slate-500">Chargement…</div>
 
@@ -505,9 +509,19 @@ export default function CadencierPage() {
                   {/* Quantity */}
                   <input
                     key={`${p.id}-${qty[p.id] ?? "e"}`}
+                    ref={el => { qtyRefs.current[p.id] = el }}
                     defaultValue={qty[p.id] ?? ""}
                     disabled={!active}
                     onBlur={e => { const v = parseNum(e.target.value); if (v !== (qty[p.id] ?? null)) setQuantity(p.id, v) }}
+                    onKeyDown={e => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        const idx = orderedIds.indexOf(p.id)
+                        const next = orderedIds[idx + 1]
+                        const nextEl = next ? qtyRefs.current[next] : null
+                        if (nextEl) { nextEl.focus(); nextEl.select() } else e.currentTarget.blur()
+                      }
+                    }}
                     inputMode="decimal"
                     title={active ? "" : "Démarrez une saisie pour renseigner la quantité"}
                     className={`w-16 flex-shrink-0 text-center rounded-md px-2 py-1.5 font-semibold border focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
