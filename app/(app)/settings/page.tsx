@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Save, User, Bell, Database } from "lucide-react"
+import { UsersAdmin } from "@/components/settings/UsersAdmin"
 
 export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
@@ -58,6 +59,9 @@ export default function SettingsPage() {
           </Button>
         </div>
       </div>
+
+      {/* Users administration (managers only) */}
+      <UsersAdmin />
 
       {/* Notifications */}
       <div className="bg-slate-800 border border-slate-700 rounded-xl">
