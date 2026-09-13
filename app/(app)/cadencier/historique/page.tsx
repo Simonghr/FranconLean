@@ -226,6 +226,7 @@ export default function CadencierHistoriquePage() {
                                   {qty[p.id] ?? "—"}
                                 </div>
                               )}
+                              <span className="w-16 text-[11px] text-slate-500 flex-shrink-0 truncate">{p.unit ?? ""}</span>
                             </li>
                           ))}
                         </ul>
