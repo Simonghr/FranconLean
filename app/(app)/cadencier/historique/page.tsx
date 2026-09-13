@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
-import { History, ArrowLeft, User, Clock, PackageCheck, ClipboardList, Pencil, Trash2, Check } from "lucide-react"
+import { History, ArrowLeft, User, Clock, PackageCheck, ClipboardList, Pencil, Trash2, Check, Truck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import * as productsRepo from "@/lib/repositories/products"
@@ -29,6 +29,7 @@ export default function CadencierHistoriquePage() {
   const [qty, setQty] = useState<Record<string, number | null>>({})
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [editing, setEditing] = useState(false)
+  const [groupBy, setGroupBy] = useState<"zone" | "supplier">("zone")
 
   useEffect(() => {
     let alive = true
@@ -93,12 +94,14 @@ export default function CadencierHistoriquePage() {
   const groups = useMemo(() => {
     const map = new Map<string, Product[]>()
     for (const p of [...products].sort((a, b) => a.position - b.position)) {
-      const key = p.zone || NO_ZONE
+      const key = groupBy === "zone" ? (p.zone || NO_ZONE) : p.supplier
       if (!map.has(key)) map.set(key, [])
       map.get(key)!.push(p)
     }
-    return [...map.entries()]
-  }, [products])
+    const entries = [...map.entries()]
+    // Zone view keeps the counting order (by position); supplier view is A→Z.
+    return groupBy === "supplier" ? entries.sort((a, b) => a[0].localeCompare(b[0])) : entries
+  }, [products, groupBy])
 
   const filledCount = Object.values(qty).filter(v => v != null).length
 
@@ -190,14 +193,28 @@ export default function CadencierHistoriquePage() {
                   <p className="text-xs text-slate-500 mb-3">Modifiez les quantités et l'en-tête ci-dessous — tout est enregistré automatiquement.</p>
                 )}
 
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-xs text-slate-500">Trier :</span>
+                  <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-0.5">
+                    {(["zone", "supplier"] as const).map(g => (
+                      <button key={g} onClick={() => setGroupBy(g)}
+                        className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                          groupBy === g ? "bg-cyan-600 text-white" : "text-slate-400 hover:text-white"
+                        }`}>
+                        {g === "zone" ? "Par zone" : "Par fournisseur"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {loadingDetail ? (
                   <div className="text-center text-slate-500 py-10">Chargement…</div>
                 ) : (
                   <div className="space-y-4">
-                    {groups.map(([zone, items]) => (
-                      <div key={zone} className="bg-slate-800/40 border border-slate-700 rounded-xl overflow-hidden">
+                    {groups.map(([groupName, items]) => (
+                      <div key={groupName} className="bg-slate-800/40 border border-slate-700 rounded-xl overflow-hidden">
                         <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 border-b border-slate-700 text-sm font-semibold text-white">
-                          <PackageCheck className="w-4 h-4 text-cyan-400" /> {zone}
+                          {groupBy === "zone" ? <PackageCheck className="w-4 h-4 text-cyan-400" /> : <Truck className="w-4 h-4 text-cyan-400" />} {groupName}
                           <span className="text-xs font-normal text-slate-500">({items.length})</span>
                         </div>
                         <ul>
