@@ -111,7 +111,7 @@ export default function CadencierHistoriquePage() {
     <div className="space-y-6 max-w-[1100px]">
       <div className="flex items-center gap-3 flex-wrap">
         <Link href="/cadencier" className="text-slate-400 hover:text-white flex items-center gap-1.5 text-sm">
-          <ArrowLeft className="w-4 h-4" /> Cadencier
+          <ArrowLeft className="w-4 h-4" /> Gestion de stock
         </Link>
         <h1 className="text-2xl font-bold text-white flex items-center gap-2">
           <History className="w-6 h-6 text-cyan-400" /> Historique des saisies
@@ -120,7 +120,7 @@ export default function CadencierHistoriquePage() {
 
       {sessions.length === 0 ? (
         <div className="bg-slate-800/50 border border-dashed border-slate-600 rounded-xl px-4 py-8 text-center text-slate-400">
-          Aucune saisie validée pour le moment. Les saisies apparaîtront ici une fois <span className="text-slate-200">validées</span> depuis le Cadencier.
+          Aucune saisie validée pour le moment. Les saisies apparaîtront ici une fois <span className="text-slate-200">validées</span> depuis la Gestion de stock.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-5">

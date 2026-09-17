@@ -296,7 +296,7 @@ export default function CadencierPage() {
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <ClipboardList className="w-6 h-6 text-cyan-400" />
-            Cadencier de commande
+            Gestion de stock
           </h1>
           <p className="text-slate-400 text-sm mt-1">
             {active

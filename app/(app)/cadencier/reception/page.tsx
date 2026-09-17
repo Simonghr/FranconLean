@@ -187,7 +187,7 @@ export default function ReceptionPage() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 flex-wrap">
           <Link href="/cadencier" className="text-slate-400 hover:text-white flex items-center gap-1.5 text-sm">
-            <ArrowLeft className="w-4 h-4" /> Cadencier
+            <ArrowLeft className="w-4 h-4" /> Gestion de stock
           </Link>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Truck className="w-6 h-6 text-emerald-400" /> Réceptions

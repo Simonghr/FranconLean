@@ -13,7 +13,7 @@ import { isPathAllowed } from "@/lib/access"
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Tableau de bord" },
   { href: "/performance", icon: TrendingUp, label: "Performance CA" },
-  { href: "/cadencier", icon: ClipboardList, label: "Cadencier" },
+  { href: "/cadencier", icon: ClipboardList, label: "Gestion de stock" },
   { href: "/incidents", icon: AlertTriangle, label: "Incidents" },
   { href: "/gx", icon: Star, label: "GX Score" },
   { href: "/lean", icon: Layers, label: "Lean Tools" },
