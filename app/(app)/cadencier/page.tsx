@@ -46,6 +46,7 @@ export default function CadencierPage() {
   }, [])
   const changeDept = (d: "fb" | "consommable") => {
     setDept(d); clearSelect()
+    if (d === "consommable") setGroupBy("zone") // no supplier grouping for consumables
     try { localStorage.setItem("stockDept", d) } catch { /* ignore */ }
   }
   // A ref (not state) so dragging triggers NO re-render mid-dragstart, which
@@ -469,7 +470,7 @@ export default function CadencierPage() {
           <Input placeholder="Rechercher un produit…" value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
         <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-0.5">
-          {(["zone", "supplier"] as GroupBy[]).map(g => (
+          {(dept === "consommable" ? (["zone"] as GroupBy[]) : (["zone", "supplier"] as GroupBy[])).map(g => (
             <button key={g} onClick={() => setGroupBy(g)}
               className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 groupBy === g ? "bg-cyan-600 text-white" : "text-slate-400 hover:text-white"
