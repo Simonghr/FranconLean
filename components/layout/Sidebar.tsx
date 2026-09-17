@@ -3,7 +3,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard, TrendingUp, AlertTriangle, Star,
-  Layers, MapPin, Settings, Activity, LogOut, Brain, ListChecks, ClipboardList,
+  Layers, MapPin, Settings, Activity, LogOut, Brain, ClipboardList,
   ChevronsLeft, ChevronsRight
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -12,7 +12,6 @@ import { isPathAllowed } from "@/lib/access"
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Tableau de bord" },
-  { href: "/ameliorations", icon: ListChecks, label: "Anniversaire" },
   { href: "/performance", icon: TrendingUp, label: "Performance CA" },
   { href: "/cadencier", icon: ClipboardList, label: "Cadencier" },
   { href: "/incidents", icon: AlertTriangle, label: "Incidents" },

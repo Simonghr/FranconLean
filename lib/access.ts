@@ -1,16 +1,11 @@
 import type { UserRole } from '@/lib/types'
 
 // Routes each restricted role is allowed to visit. Roles not listed here have
-// full access. A rule is matched as an exact path OR as a prefix ("/x/…").
+// full access.
 const ROLE_ALLOWED_PREFIXES: Partial<Record<UserRole, string[]>> = {
-  collaborator: ['/ameliorations'],
-  // Staff (comptage uniquement) : accès à la page cadencier seulement — pas
-  // aux sous-pages de gestion (réceptions, ventes, recettes, commandes…).
+  // Staff (comptage uniquement) : la page cadencier seulement.
   staff: ['/cadencier'],
 }
-
-// Kept for backwards-compatibility with existing imports.
-export const COLLABORATOR_ALLOWED_PREFIXES = ROLE_ALLOWED_PREFIXES.collaborator!
 
 export function isPathAllowed(role: UserRole | null | undefined, pathname: string): boolean {
   if (!role) return true
@@ -26,6 +21,5 @@ export function isPathAllowed(role: UserRole | null | undefined, pathname: strin
 // Where to send a restricted user who lands on a page they can't access.
 export function landingPath(role: UserRole | null | undefined): string {
   if (role === 'staff') return '/cadencier'
-  if (role === 'collaborator') return '/ameliorations'
   return '/dashboard'
 }
