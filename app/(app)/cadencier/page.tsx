@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
-import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck, ShoppingCart, ChefHat, Pencil, ChevronUp, ChevronDown, ClipboardCheck } from "lucide-react"
+import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck, ShoppingCart, ChefHat, Pencil, ChevronUp, ChevronDown, ClipboardCheck, PackagePlus, PackageOpen, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -67,6 +67,11 @@ export default function CadencierPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [addForm, setAddForm] = useState({ name: "", supplier: "", zone: "", unit: "", target: "", temporary: false })
+  // Consumables: "add stock" (reception) and "open a carton" (−1) modals.
+  const [stockOpen, setStockOpen] = useState(false)
+  const [cartonOpen, setCartonOpen] = useState(false)
+  const [stockForm, setStockForm] = useState({ productId: "", qty: "", isNew: false, name: "", supplier: "", unit: "" })
+  const [cartonProductId, setCartonProductId] = useState("")
 
   useEffect(() => {
     let alive = true
@@ -203,6 +208,46 @@ export default function CadencierPage() {
     } catch (e) { console.error(e) }
   }
 
+  // ── Consumables stock actions ───────────────────────────────────────────
+  const setStock = (id: string, stock: number) => {
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, stock } : p))
+    productsRepo.update(id, { stock }).catch(console.error)
+  }
+
+  const openAddStock = () => {
+    setStockForm({ productId: deptProducts[0]?.id ?? "", qty: "", isNew: deptProducts.length === 0, name: "", supplier: "", unit: "" })
+    setStockOpen(true)
+  }
+  const submitAddStock = async () => {
+    const q = parseNum(stockForm.qty)
+    if (q == null || q <= 0) { window.alert("Indiquez une quantité reçue valide."); return }
+    try {
+      if (stockForm.isNew) {
+        const name = stockForm.name.trim()
+        if (!name) { window.alert("Nom du consommable requis."); return }
+        const maxPos = products.reduce((m, p) => Math.max(m, p.position), 0)
+        const created = await productsRepo.create({
+          site_id: SITE_ID, name, supplier: stockForm.supplier.trim() || "Divers",
+          unit: stockForm.unit.trim() || "carton", department: "consommable", position: maxPos + 10, stock: q,
+        })
+        setProducts(prev => [...prev, created])
+      } else {
+        const target = products.find(p => p.id === stockForm.productId)
+        if (!target) { window.alert("Sélectionnez un consommable."); return }
+        setStock(target.id, (target.stock ?? 0) + q)
+      }
+      setStockOpen(false)
+    } catch (e: any) { console.error(e); window.alert(`Erreur : ${e?.message ?? e}`) }
+  }
+
+  const openCarton = () => { setCartonProductId(deptProducts[0]?.id ?? ""); setCartonOpen(true) }
+  const submitCarton = () => {
+    const p = products.find(x => x.id === cartonProductId)
+    if (!p) { window.alert("Sélectionnez un consommable."); return }
+    setStock(p.id, (p.stock ?? 0) - 1)
+    setCartonOpen(false)
+  }
+
   const handleDrop = async (targetId: string) => {
     const dragId = dragIdRef.current
     dragIdRef.current = null
@@ -315,12 +360,20 @@ export default function CadencierPage() {
             Gestion de stock
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            {active
-              ? `Saisie en cours · ${filledCount}/${deptProducts.length} renseignés`
-              : "Démarrez une nouvelle saisie pour compter le stock"}
+            {dept === "consommable"
+              ? `${deptProducts.length} consommable${deptProducts.length > 1 ? "s" : ""} suivi${deptProducts.length > 1 ? "s" : ""}`
+              : active
+                ? `Saisie en cours · ${filledCount}/${deptProducts.length} renseignés`
+                : "Démarrez une nouvelle saisie pour compter le stock"}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {dept === "consommable" ? (
+            canManage && <>
+              <Button size="sm" onClick={openAddStock}><PackagePlus className="w-4 h-4 mr-1.5" /> Ajouter du stock</Button>
+              <Button size="sm" variant="outline" onClick={openCarton}><PackageOpen className="w-4 h-4 mr-1.5" /> Nouveau carton ouvert</Button>
+            </>
+          ) : (<>
           {canManage && <>
           <Link href="/cadencier/commandes">
             <Button variant="outline" size="sm">
@@ -361,6 +414,7 @@ export default function CadencierPage() {
           <Button size="sm" onClick={() => setSaveOpen(true)} disabled={!active}>
             <Save className="w-4 h-4 mr-1.5" /> Enregistrer
           </Button>
+          </>)}
         </div>
       </div>
 
@@ -380,7 +434,7 @@ export default function CadencierPage() {
       </div>
 
       {/* Active session banner */}
-      {active && (
+      {active && dept === "fb" && (
         <div className="flex items-center gap-4 flex-wrap bg-cyan-500/10 border border-cyan-500/30 rounded-xl px-4 py-2.5 text-sm">
           <span className="text-cyan-300 font-semibold flex items-center gap-1.5">
             <ClipboardList className="w-4 h-4" /> Saisie du {session!.session_date.split("-").reverse().join("/")}
@@ -542,30 +596,39 @@ export default function CadencierPage() {
                     />
                   )}
 
-                  {/* Quantity */}
-                  <input
-                    key={`${p.id}-${qty[p.id] ?? "e"}`}
-                    ref={el => { qtyRefs.current[p.id] = el }}
-                    defaultValue={qty[p.id] ?? ""}
-                    disabled={!active}
-                    onBlur={e => { const v = parseNum(e.target.value); if (v !== (qty[p.id] ?? null)) setQuantity(p.id, v) }}
-                    onKeyDown={e => {
-                      if (e.key === "Enter") {
-                        e.preventDefault()
-                        const idx = orderedIds.indexOf(p.id)
-                        if (orderedIds[idx + 1]) focusNextQty(p.id); else e.currentTarget.blur()
-                      }
-                    }}
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    title={active ? "" : "Démarrez une saisie pour renseigner la quantité"}
-                    className={`w-16 flex-shrink-0 text-center rounded-md px-2 py-1.5 font-semibold border focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
-                      qty[p.id] == null
-                        ? "bg-slate-900 border-slate-600 text-white focus:border-cyan-500"
-                        : "bg-cyan-500/10 border-cyan-500/40 text-cyan-300 focus:border-cyan-400"
-                    }`}
-                    placeholder="Qté"
-                  />
+                  {dept === "consommable" ? (
+                    /* Current stock (adjusted via "Ajouter du stock" / "Carton ouvert") */
+                    <div className={`w-16 flex-shrink-0 text-center rounded-md px-2 py-1.5 font-semibold border ${
+                      (p.stock ?? 0) < 0 ? "bg-red-500/10 border-red-500/40 text-red-300" : "bg-cyan-500/10 border-cyan-500/40 text-cyan-300"
+                    }`} title="Stock actuel">
+                      {p.stock ?? 0}
+                    </div>
+                  ) : (
+                    /* Quantity */
+                    <input
+                      key={`${p.id}-${qty[p.id] ?? "e"}`}
+                      ref={el => { qtyRefs.current[p.id] = el }}
+                      defaultValue={qty[p.id] ?? ""}
+                      disabled={!active}
+                      onBlur={e => { const v = parseNum(e.target.value); if (v !== (qty[p.id] ?? null)) setQuantity(p.id, v) }}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          const idx = orderedIds.indexOf(p.id)
+                          if (orderedIds[idx + 1]) focusNextQty(p.id); else e.currentTarget.blur()
+                        }
+                      }}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      title={active ? "" : "Démarrez une saisie pour renseigner la quantité"}
+                      className={`w-16 flex-shrink-0 text-center rounded-md px-2 py-1.5 font-semibold border focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed ${
+                        qty[p.id] == null
+                          ? "bg-slate-900 border-slate-600 text-white focus:border-cyan-500"
+                          : "bg-cyan-500/10 border-cyan-500/40 text-cyan-300 focus:border-cyan-400"
+                      }`}
+                      placeholder="Qté"
+                    />
+                  )}
 
                   {canManage && (
                     <button onClick={() => openEdit(p)} title="Modifier le produit" className="text-slate-600 hover:text-cyan-400 transition-colors flex-shrink-0">
@@ -583,6 +646,77 @@ export default function CadencierPage() {
           </ul>
         </div>
       ))}
+
+      {/* ── Consumable: add stock (reception) ── */}
+      {stockOpen && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setStockOpen(false)}>
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2"><PackagePlus className="w-5 h-5 text-cyan-400" /> Ajouter du stock</h3>
+              <button onClick={() => setStockOpen(false)} className="text-slate-500 hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-3">
+              {!stockForm.isNew ? (
+                <div className="space-y-1.5">
+                  <Label>Consommable</Label>
+                  <select value={stockForm.productId} onChange={e => setStockForm(f => ({ ...f, productId: e.target.value }))}
+                    className="w-full text-sm px-3 py-2 rounded-lg border bg-slate-800 text-slate-200 border-slate-700 focus:outline-none focus:border-cyan-500">
+                    {deptProducts.length === 0 && <option value="">— aucun —</option>}
+                    {deptProducts.map(p => <option key={p.id} value={p.id}>{p.name}{p.supplier ? ` — ${p.supplier}` : ""}</option>)}
+                  </select>
+                  <button onClick={() => setStockForm(f => ({ ...f, isNew: true }))} className="text-xs text-cyan-400 hover:text-cyan-300">+ Nouveau consommable</button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="space-y-1.5"><Label>Nom du consommable</Label>
+                    <Input autoFocus value={stockForm.name} onChange={e => setStockForm(f => ({ ...f, name: e.target.value }))} placeholder="ex. Gobelets 30cl" /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5"><Label>Fournisseur</Label>
+                      <Input list="supplier-list" value={stockForm.supplier} onChange={e => setStockForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Fournisseur" /></div>
+                    <div className="space-y-1.5"><Label>Unité</Label>
+                      <Input value={stockForm.unit} onChange={e => setStockForm(f => ({ ...f, unit: e.target.value }))} placeholder="carton" /></div>
+                  </div>
+                  {deptProducts.length > 0 && <button onClick={() => setStockForm(f => ({ ...f, isNew: false }))} className="text-xs text-slate-400 hover:text-white">← Choisir un consommable existant</button>}
+                </div>
+              )}
+              <div className="space-y-1.5">
+                <Label>Quantité reçue</Label>
+                <Input value={stockForm.qty} inputMode="decimal" onChange={e => setStockForm(f => ({ ...f, qty: e.target.value }))}
+                  onKeyDown={e => { if (e.key === "Enter") submitAddStock() }} placeholder="ex. 5" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setStockOpen(false)}>Annuler</Button>
+              <Button onClick={submitAddStock} className="bg-cyan-600 hover:bg-cyan-500">Ajouter au stock</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Consumable: open a carton (−1) ── */}
+      {cartonOpen && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setCartonOpen(false)}>
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2"><PackageOpen className="w-5 h-5 text-amber-400" /> Nouveau carton ouvert</h3>
+              <button onClick={() => setCartonOpen(false)} className="text-slate-500 hover:text-white"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Consommable</Label>
+              <select value={cartonProductId} onChange={e => setCartonProductId(e.target.value)}
+                className="w-full text-sm px-3 py-2 rounded-lg border bg-slate-800 text-slate-200 border-slate-700 focus:outline-none focus:border-amber-500">
+                {deptProducts.length === 0 && <option value="">— aucun —</option>}
+                {deptProducts.map(p => <option key={p.id} value={p.id}>{p.name} · stock {p.stock ?? 0}</option>)}
+              </select>
+              <p className="text-[11px] text-slate-500">Décompte 1 carton du stock fermé.</p>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setCartonOpen(false)}>Annuler</Button>
+              <Button onClick={submitCarton} disabled={deptProducts.length === 0} className="bg-amber-600 hover:bg-amber-500">Ouvrir un carton (−1)</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <datalist id="zone-list">
         {zones.map(z => <option key={z} value={z} />)}
