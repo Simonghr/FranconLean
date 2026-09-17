@@ -330,6 +330,8 @@ export default function CadencierPage() {
   }, [deptProducts, search, supplierFilter, zoneFilter, groupBy])
 
   const groups = useMemo(() => {
+    // Consumables: a single flat list (no zone/supplier grouping).
+    if (dept === "consommable") return [["", visible]] as [string, Product[]][]
     const map = new Map<string, Product[]>()
     for (const p of visible) {
       const key = groupBy === "zone" ? (p.zone || NO_ZONE) : p.supplier
@@ -337,7 +339,7 @@ export default function CadencierPage() {
       map.get(key)!.push(p)
     }
     return [...map.entries()]
-  }, [visible, groupBy])
+  }, [visible, groupBy, dept])
 
   const filledCount = deptProducts.filter(p => qty[p.id] != null).length
   const active = !!session
@@ -469,17 +471,19 @@ export default function CadencierPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <Input placeholder="Rechercher un produit…" value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-0.5">
-          {(dept === "consommable" ? (["zone"] as GroupBy[]) : (["zone", "supplier"] as GroupBy[])).map(g => (
-            <button key={g} onClick={() => setGroupBy(g)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                groupBy === g ? "bg-cyan-600 text-white" : "text-slate-400 hover:text-white"
-              }`}>
-              {g === "zone" ? "Par zone" : "Par fournisseur"}
-            </button>
-          ))}
-        </div>
-        {groupBy === "zone" ? (
+        {dept === "fb" && (
+          <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-0.5">
+            {(["zone", "supplier"] as GroupBy[]).map(g => (
+              <button key={g} onClick={() => setGroupBy(g)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  groupBy === g ? "bg-cyan-600 text-white" : "text-slate-400 hover:text-white"
+                }`}>
+                {g === "zone" ? "Par zone" : "Par fournisseur"}
+              </button>
+            ))}
+          </div>
+        )}
+        {dept === "fb" && (groupBy === "zone" ? (
           <select
             value={zoneFilter}
             onChange={e => setZoneFilter(e.target.value)}
@@ -497,7 +501,7 @@ export default function CadencierPage() {
             <option value="all">Tous les fournisseurs</option>
             {suppliers.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-        )}
+        ))}
       </div>
 
       {!active && (
@@ -506,14 +510,14 @@ export default function CadencierPage() {
         </div>
       )}
 
-      {groupBy === "zone" && canManage && (
+      {dept === "fb" && groupBy === "zone" && canManage && (
         <p className="text-xs text-slate-500 -mt-2">
           Glissez <GripVertical className="w-3 h-3 inline" /> pour réordonner · déposez une ligne dans une autre zone pour l'y déplacer · cochez plusieurs produits pour les déplacer ensemble.
         </p>
       )}
 
       {/* Multi-selection action bar */}
-      {canManage && groupBy === "zone" && selected.size > 0 && (
+      {dept === "fb" && canManage && groupBy === "zone" && selected.size > 0 && (
         <div className="flex items-center gap-3 flex-wrap bg-cyan-500/10 border border-cyan-500/40 rounded-xl px-4 py-2.5 text-sm sticky top-2 z-20 shadow-lg">
           <span className="text-cyan-200 font-semibold">{selected.size} produit{selected.size > 1 ? "s" : ""} sélectionné{selected.size > 1 ? "s" : ""}</span>
           <label className="flex items-center gap-2 text-slate-300">
@@ -532,11 +536,13 @@ export default function CadencierPage() {
       {/* Groups */}
       {groups.map(([groupName, items]) => (
         <div key={groupName} className="bg-slate-800/40 border border-slate-700 rounded-xl overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 border-b border-slate-700 text-sm font-semibold text-white">
-            {groupBy === "zone" ? <PackageCheck className="w-4 h-4 text-cyan-400" /> : null}
-            {groupName}
-            <span className="text-xs font-normal text-slate-500">({items.length})</span>
-          </div>
+          {dept === "fb" && (
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 border-b border-slate-700 text-sm font-semibold text-white">
+              {groupBy === "zone" ? <PackageCheck className="w-4 h-4 text-cyan-400" /> : null}
+              {groupName}
+              <span className="text-xs font-normal text-slate-500">({items.length})</span>
+            </div>
+          )}
 
           <ul>
             {items.map(p => (
@@ -546,11 +552,11 @@ export default function CadencierPage() {
                 onDrop={() => handleDrop(p.id)}
                 className={`flex items-center gap-3 flex-wrap px-3 py-2.5 border-b border-slate-700/40 hover:bg-slate-700/20 transition-colors ${selected.has(p.id) ? "bg-cyan-500/10" : ""}`}
               >
-                {canManage && groupBy === "zone" && (
+                {dept === "fb" && canManage && groupBy === "zone" && (
                   <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)}
                     title="Sélectionner" className="w-4 h-4 accent-cyan-500 flex-shrink-0" />
                 )}
-                {canManage && groupBy === "zone" && (
+                {dept === "fb" && canManage && groupBy === "zone" && (
                   <span className="flex items-center flex-shrink-0">
                     <span
                       draggable
@@ -597,7 +603,7 @@ export default function CadencierPage() {
                     <span className="w-16 text-xs text-slate-500 text-right truncate">{p.unit ?? ""}</span>
                   )}
 
-                  {canManage && (
+                  {canManage && dept === "fb" && (
                     <input
                       list="zone-list"
                       defaultValue={p.zone ?? ""}
@@ -764,13 +770,15 @@ export default function CadencierPage() {
                   <p className="text-[11px] text-slate-500">Tapez un nom pour créer un nouveau fournisseur (ex. Nespresso).</p>
                 </div>
               )}
-              <div className="space-y-1.5">
-                <Label>Zone</Label>
-                <Input list="zone-list" value={addForm.zone}
-                  onChange={e => setAddForm(f => ({ ...f, zone: e.target.value }))}
-                  placeholder="Choisir ou saisir une nouvelle zone…" />
-                <p className="text-[11px] text-slate-500">Laissez vide pour « sans zone », ou tapez un nom pour créer une nouvelle zone.</p>
-              </div>
+              {!modalConsommable && (
+                <div className="space-y-1.5">
+                  <Label>Zone</Label>
+                  <Input list="zone-list" value={addForm.zone}
+                    onChange={e => setAddForm(f => ({ ...f, zone: e.target.value }))}
+                    placeholder="Choisir ou saisir une nouvelle zone…" />
+                  <p className="text-[11px] text-slate-500">Laissez vide pour « sans zone », ou tapez un nom pour créer une nouvelle zone.</p>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Unité de comptage</Label>
