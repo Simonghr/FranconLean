@@ -39,6 +39,15 @@ export default function CadencierPage() {
   const [groupBy, setGroupBy] = useState<GroupBy>("zone")
   const [supplierFilter, setSupplierFilter] = useState<string>("all")
   const [zoneFilter, setZoneFilter] = useState<string>("all")
+  // Stock department sub-section: F&B (existing) or Consommables (new).
+  const [dept, setDept] = useState<"fb" | "consommable">("fb")
+  useEffect(() => {
+    try { const v = localStorage.getItem("stockDept"); if (v === "fb" || v === "consommable") setDept(v) } catch { /* ignore */ }
+  }, [])
+  const changeDept = (d: "fb" | "consommable") => {
+    setDept(d); clearSelect()
+    try { localStorage.setItem("stockDept", d) } catch { /* ignore */ }
+  }
   // A ref (not state) so dragging triggers NO re-render mid-dragstart, which
   // would mutate the dragged DOM node and freeze the browser's drag.
   const dragIdRef = useRef<string | null>(null)
@@ -139,8 +148,9 @@ export default function CadencierPage() {
   const validateSession = async () => {
     if (!session) return
     try {
-      // Complete the saisie: every product without a value is recorded as 0.
-      const missing = products.filter(p => qty[p.id] == null)
+      // Complete the saisie: every product of this sub-section without a value
+      // is recorded as 0 (the other sub-section is left untouched).
+      const missing = deptProducts.filter(p => qty[p.id] == null)
       await Promise.all(missing.map(p => productsRepo.setLine(session.id, p.id, 0)))
       await productsRepo.updateSession(session.id, { status: "validated" })
     } catch (e) { console.error(e) }
@@ -176,7 +186,7 @@ export default function CadencierPage() {
         setProducts(prev => prev.map(p => p.id === editId ? updated : p))
       } else {
         const maxPos = products.reduce((m, p) => Math.max(m, p.position), 0)
-        const created = await productsRepo.create({ site_id: SITE_ID, position: maxPos + 10, ...patch })
+        const created = await productsRepo.create({ site_id: SITE_ID, position: maxPos + 10, department: dept, ...patch })
         setProducts(prev => [...prev, created])
       }
       setAddOpen(false); setEditId(null)
@@ -255,9 +265,15 @@ export default function CadencierPage() {
     } catch (e) { console.error(e) }
   }
 
+  // Products of the current sub-section (F&B / Consommables).
+  const deptProducts = useMemo(
+    () => products.filter(p => (p.department ?? "fb") === dept),
+    [products, dept]
+  )
+
   const visible = useMemo(() => {
     const q = search.trim().toLowerCase()
-    return products
+    return deptProducts
       .filter(p =>
         groupBy === "zone"
           ? zoneFilter === "all" || (p.zone || NO_ZONE) === zoneFilter
@@ -265,7 +281,7 @@ export default function CadencierPage() {
       )
       .filter(p => !q || p.name.toLowerCase().includes(q) || p.supplier.toLowerCase().includes(q))
       .sort((a, b) => a.position - b.position)
-  }, [products, search, supplierFilter, zoneFilter, groupBy])
+  }, [deptProducts, search, supplierFilter, zoneFilter, groupBy])
 
   const groups = useMemo(() => {
     const map = new Map<string, Product[]>()
@@ -277,7 +293,7 @@ export default function CadencierPage() {
     return [...map.entries()]
   }, [visible, groupBy])
 
-  const filledCount = Object.values(qty).filter(v => v != null).length
+  const filledCount = deptProducts.filter(p => qty[p.id] != null).length
   const active = !!session
   // Product ids in display order (across all groups), for Enter-to-next-cell.
   const orderedIds = groups.flatMap(([, items]) => items.map(p => p.id))
@@ -300,7 +316,7 @@ export default function CadencierPage() {
           </h1>
           <p className="text-slate-400 text-sm mt-1">
             {active
-              ? `Saisie en cours · ${filledCount}/${products.length} renseignés`
+              ? `Saisie en cours · ${filledCount}/${deptProducts.length} renseignés`
               : "Démarrez une nouvelle saisie pour compter le stock"}
           </p>
         </div>
@@ -346,6 +362,21 @@ export default function CadencierPage() {
             <Save className="w-4 h-4 mr-1.5" /> Enregistrer
           </Button>
         </div>
+      </div>
+
+      {/* Sub-section tabs: F&B / Consommables */}
+      <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-xl p-1 w-fit">
+        {([["fb", "F&B"], ["consommable", "Consommables"]] as const).map(([d, label]) => (
+          <button
+            key={d}
+            onClick={() => changeDept(d)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+              dept === d ? "bg-cyan-600 text-white" : "text-slate-400 hover:text-white"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Active session banner */}
@@ -563,8 +594,11 @@ export default function CadencierPage() {
         {suppliers.map(s => <option key={s} value={s} />)}
       </datalist>
 
-      {products.length === 0 && (
-        <div className="text-center text-slate-500 py-12">Aucun produit. Cliquez sur « Produit ».</div>
+      {deptProducts.length === 0 && (
+        <div className="text-center text-slate-500 py-12">
+          Aucun produit dans <span className="text-slate-300">{dept === "fb" ? "F&B" : "Consommables"}</span>.
+          {canManage && <> Cliquez sur « Produit » pour en ajouter.</>}
+        </div>
       )}
 
       {/* ── Add product modal ── */}

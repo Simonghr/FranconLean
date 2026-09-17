@@ -184,6 +184,7 @@ export interface Product {
   temporary: boolean
   unit: string | null
   stock: number | null
+  department: string   // 'fb' | 'consommable'
   created_at: string
 }
 
