@@ -179,7 +179,7 @@ export default function CadencierPage() {
     const t = addForm.target.trim().replace(",", ".")
     const patch = {
       name,
-      supplier: addForm.supplier.trim() || "Divers",
+      supplier: modalConsommable ? "" : (addForm.supplier.trim() || "Divers"),
       zone: addForm.zone.trim() || null,
       unit: addForm.unit.trim() || null,
       target_stock: t === "" ? null : (isNaN(Number(t)) ? null : Number(t)),
@@ -227,7 +227,7 @@ export default function CadencierPage() {
         if (!name) { window.alert("Nom du consommable requis."); return }
         const maxPos = products.reduce((m, p) => Math.max(m, p.position), 0)
         const created = await productsRepo.create({
-          site_id: SITE_ID, name, supplier: stockForm.supplier.trim() || "Divers",
+          site_id: SITE_ID, name, supplier: "",
           unit: stockForm.unit.trim() || "carton", department: "consommable", position: maxPos + 10, stock: q,
         })
         setProducts(prev => [...prev, created])
@@ -347,6 +347,11 @@ export default function CadencierPage() {
     const nextEl = qtyRefs.current[orderedIds[idx + 1]]
     if (nextEl) { nextEl.focus(); nextEl.select() }
   }
+
+  // Consumable products don't carry a supplier.
+  const modalConsommable = editId
+    ? ((products.find(p => p.id === editId)?.department ?? "fb") === "consommable")
+    : dept === "consommable"
 
   if (loading) return <div className="text-center py-20 text-slate-500">Chargement…</div>
 
@@ -572,7 +577,7 @@ export default function CadencierPage() {
                     )}
                   </div>
                   <div className="text-[11px] text-slate-500 truncate">
-                    {p.supplier}{p.unit ? ` · ${p.unit}` : ""}{p.note ? ` · ${p.note}` : ""}
+                    {[p.supplier, p.unit, p.note].filter(Boolean).join(" · ")}
                   </div>
                 </div>
 
@@ -675,12 +680,8 @@ export default function CadencierPage() {
                 <div className="space-y-3">
                   <div className="space-y-1.5"><Label>Nom du consommable</Label>
                     <Input autoFocus value={stockForm.name} onChange={e => setStockForm(f => ({ ...f, name: e.target.value }))} placeholder="ex. Gobelets 30cl" /></div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5"><Label>Fournisseur</Label>
-                      <Input list="supplier-list" value={stockForm.supplier} onChange={e => setStockForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Fournisseur" /></div>
-                    <div className="space-y-1.5"><Label>Unité</Label>
-                      <Input value={stockForm.unit} onChange={e => setStockForm(f => ({ ...f, unit: e.target.value }))} placeholder="carton" /></div>
-                  </div>
+                  <div className="space-y-1.5"><Label>Unité</Label>
+                    <Input value={stockForm.unit} onChange={e => setStockForm(f => ({ ...f, unit: e.target.value }))} placeholder="carton" /></div>
                   {deptProducts.length > 0 && <button onClick={() => setStockForm(f => ({ ...f, isNew: false }))} className="text-xs text-slate-400 hover:text-white">← Choisir un consommable existant</button>}
                 </div>
               )}
@@ -753,13 +754,15 @@ export default function CadencierPage() {
                 <Input autoFocus value={addForm.name} onChange={e => setAddForm(f => ({ ...f, name: e.target.value }))}
                   onKeyDown={e => { if (e.key === "Enter") submitAddProduct() }} placeholder="Nom du produit" />
               </div>
-              <div className="space-y-1.5">
-                <Label>Fournisseur</Label>
-                <Input list="supplier-list" value={addForm.supplier}
-                  onChange={e => setAddForm(f => ({ ...f, supplier: e.target.value }))}
-                  placeholder="Choisir ou saisir un nouveau fournisseur…" />
-                <p className="text-[11px] text-slate-500">Tapez un nom pour créer un nouveau fournisseur (ex. Nespresso).</p>
-              </div>
+              {!modalConsommable && (
+                <div className="space-y-1.5">
+                  <Label>Fournisseur</Label>
+                  <Input list="supplier-list" value={addForm.supplier}
+                    onChange={e => setAddForm(f => ({ ...f, supplier: e.target.value }))}
+                    placeholder="Choisir ou saisir un nouveau fournisseur…" />
+                  <p className="text-[11px] text-slate-500">Tapez un nom pour créer un nouveau fournisseur (ex. Nespresso).</p>
+                </div>
+              )}
               <div className="space-y-1.5">
                 <Label>Zone</Label>
                 <Input list="zone-list" value={addForm.zone}
