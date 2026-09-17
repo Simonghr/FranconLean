@@ -372,6 +372,11 @@ export default function CadencierPage() {
             canManage && <>
               <Button size="sm" onClick={openAddStock}><PackagePlus className="w-4 h-4 mr-1.5" /> Ajouter du stock</Button>
               <Button size="sm" variant="outline" onClick={openCarton}><PackageOpen className="w-4 h-4 mr-1.5" /> Nouveau carton ouvert</Button>
+              <Button size="sm" variant="outline" onClick={() => {
+                setEditId(null)
+                setAddForm({ name: "", supplier: suppliers[0] ?? "", zone: "", unit: "", target: "", temporary: false })
+                setAddOpen(true)
+              }}><Plus className="w-4 h-4 mr-1.5" /> Produit</Button>
             </>
           ) : (<>
           {canManage && <>
