@@ -185,6 +185,7 @@ export interface Product {
   unit: string | null
   stock: number | null
   department: string   // 'fb' | 'consommable'
+  unit_price: number | null
   created_at: string
 }
 
