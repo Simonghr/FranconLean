@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react"
 import { format } from "date-fns"
 import { fr } from "date-fns/locale"
-import { Bell, MapPin, ChevronDown, Check, Menu } from "lucide-react"
+import { Bell, MapPin, ChevronDown, Check, Menu, Eye } from "lucide-react"
 import { useAuth } from "@/lib/context/AuthContext"
 import { useSite } from "@/lib/context/SiteContext"
 
@@ -52,6 +52,32 @@ function SiteSwitcher() {
   )
 }
 
+const VIEW_LABELS: Record<string, string> = {
+  admin: "Admin", direction: "Direction", manager: "Manager", staff: "Staff",
+}
+
+function ViewAsSwitcher() {
+  const { isAdmin, realRole, viewRole, setViewRole } = useAuth()
+  if (!isAdmin) return null
+  const current = viewRole ?? realRole ?? "admin"
+  return (
+    <label className="flex items-center gap-1.5 rounded-lg px-2 py-1 bg-slate-800 border border-slate-700">
+      <Eye className={`w-4 h-4 ${viewRole ? "text-amber-400" : "text-slate-400"}`} />
+      <span className="text-xs text-slate-400 hidden sm:inline">Voir en</span>
+      <select
+        value={current}
+        onChange={e => setViewRole(e.target.value === "admin" ? null : (e.target.value as any))}
+        className="bg-transparent text-sm text-white focus:outline-none cursor-pointer"
+        title="Prévisualiser l'application avec les droits d'un rôle"
+      >
+        {["admin", "direction", "manager", "staff"].map(r => (
+          <option key={r} value={r} className="bg-slate-800">{VIEW_LABELS[r]}</option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
 export function Header({ onMenu }: { onMenu?: () => void }) {
   const { user } = useAuth()
   const today = new Date()
@@ -75,6 +101,7 @@ export function Header({ onMenu }: { onMenu?: () => void }) {
       </div>
 
       <div className="flex items-center gap-3 flex-shrink-0">
+        <ViewAsSwitcher />
         <button className="relative text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors">
           <Bell className="w-5 h-5" />
           <span className="absolute top-0.5 right-0.5 w-2 h-2 bg-orange-500 rounded-full" />

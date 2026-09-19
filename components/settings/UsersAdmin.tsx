@@ -11,9 +11,9 @@ interface Row { id: string; name: string | null; email: string | null; role: str
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Admin", direction: "Direction", manager: "Manager",
-  collaborator: "Collaborateur", staff: "Staff (comptage)",
+  staff: "Staff (comptage)",
 }
-const ROLES = ["admin", "direction", "manager", "collaborator", "staff"]
+const ROLES = ["admin", "direction", "manager", "staff"]
 const EDITORS = ["admin", "direction"]
 
 async function callApi(body: Record<string, unknown>) {

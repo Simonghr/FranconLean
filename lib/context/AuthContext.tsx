@@ -15,7 +15,11 @@ async function ensureProfile(supabase: SupabaseClient, user: User) {
 
 interface AuthContextValue {
   user: User | null
-  role: UserRole | null
+  role: UserRole | null        // effective role (respects "view as" for admins)
+  realRole: UserRole | null    // the account's actual role
+  isAdmin: boolean
+  viewRole: UserRole | null    // admin preview override, or null
+  setViewRole: (r: UserRole | null) => void
   loading: boolean
   signOut: () => Promise<void>
 }
@@ -23,22 +27,46 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   role: null,
+  realRole: null,
+  isAdmin: false,
+  viewRole: null,
+  setViewRole: () => {},
   loading: true,
   signOut: async () => {},
 })
 
+const VIEW_KEY = "viewRole"
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [role, setRole] = useState<UserRole | null>(null)
+  const [realRole, setRealRole] = useState<UserRole | null>(null)
+  const [viewRole, setViewRoleState] = useState<UserRole | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const isAdmin = realRole === "admin"
+  const effective = (isAdmin && viewRole) ? viewRole : realRole
+
+  // Keep the write-permission gate in sync with the effective role.
+  useEffect(() => { setCurrentRole(effective) }, [effective])
+
+  const setViewRole = (r: UserRole | null) => {
+    setViewRoleState(r)
+    try { if (r) localStorage.setItem(VIEW_KEY, r); else localStorage.removeItem(VIEW_KEY) } catch { /* ignore */ }
+  }
 
   useEffect(() => {
     const supabase = createClient()
     const loadRole = async (u: User) => {
       const { data } = await supabase.from("profiles").select("role").eq("id", u.id).maybeSingle()
       const r = (data?.role as UserRole) ?? null
-      setRole(r)
-      setCurrentRole(r)
+      setRealRole(r)
+      // Restore an admin's "view as" preview (only admins may impersonate).
+      if (r === "admin") {
+        try { const v = localStorage.getItem(VIEW_KEY) as UserRole | null; if (v) setViewRoleState(v) } catch { /* ignore */ }
+      } else {
+        setViewRoleState(null)
+        try { localStorage.removeItem(VIEW_KEY) } catch { /* ignore */ }
+      }
     }
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user)
@@ -48,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null)
       if (session?.user) { ensureProfile(supabase, session.user); loadRole(session.user) }
-      else { setRole(null); setCurrentRole(null) }
+      else { setRealRole(null); setViewRoleState(null); setCurrentRole(null) }
     })
     return () => subscription.unsubscribe()
   }, [])
@@ -59,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, role, loading, signOut }}>
+    <AuthContext.Provider value={{ user, role: effective, realRole, isAdmin, viewRole, setViewRole, loading, signOut }}>
       {children}
     </AuthContext.Provider>
   )
