@@ -36,6 +36,7 @@ export default function CommandesPage() {
   const [override, setOverride] = useState<Record<string, number>>({})
   const [copied, setCopied] = useState<string | null>(null)
   const [scenario, setScenario] = useState<"standard" | "high">("standard")
+  const [showAll, setShowAll] = useState(false)
   const targetOf = (p: Product) => (scenario === "high" ? p.target_high : p.target_stock)
 
   useEffect(() => {
@@ -68,7 +69,7 @@ export default function CommandesPage() {
       const onHand = counts[p.id] ?? 0
       const suggested = Math.max(0, target - onHand)
       const toOrder = override[p.id] ?? suggested
-      if (toOrder <= 0) continue
+      if (!showAll && toOrder <= 0) continue
       const colis = p.pack_size && p.pack_size > 0 ? Math.ceil(toOrder / p.pack_size) : null
       const row: Row = { product: p, onHand, target, toOrder, colis }
       const arr = bySupplier.get(p.supplier) ?? []
@@ -77,11 +78,11 @@ export default function CommandesPage() {
     return [...bySupplier.entries()]
       .map(([supplier, rows]) => [supplier, rows.sort((a, b) => a.product.name.localeCompare(b.product.name))] as const)
       .sort((a, b) => a[0].localeCompare(b[0]))
-  }, [products, counts, override, scenario])
+  }, [products, counts, override, scenario, showAll])
 
   const copySupplier = (supplier: string, rows: Row[]) => {
     const today = new Date().toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })
-    const lines = rows.map(r => {
+    const lines = rows.filter(r => r.toOrder > 0).map(r => {
       const colis = r.colis != null ? ` (${r.colis} colis)` : ""
       return `- ${r.product.name} : ${r.toOrder}${r.product.unit ? " " + r.product.unit : ""}${colis}`
     })
@@ -104,15 +105,27 @@ export default function CommandesPage() {
             <ClipboardCheck className="w-6 h-6 text-amber-400" /> Commandes
           </h1>
         </div>
-        <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-0.5">
-          {([["standard", "Semaine standard"], ["high", "Forte période"]] as const).map(([s, label]) => (
-            <button key={s} onClick={() => { setScenario(s); setOverride({}) }}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                scenario === s ? (s === "high" ? "bg-amber-600 text-white" : "bg-cyan-600 text-white") : "text-slate-400 hover:text-white"
-              }`}>
-              {label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-0.5">
+            {([["standard", "Semaine standard"], ["high", "Forte période"]] as const).map(([s, label]) => (
+              <button key={s} onClick={() => { setScenario(s); setOverride({}) }}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  scenario === s ? (s === "high" ? "bg-amber-600 text-white" : "bg-cyan-600 text-white") : "text-slate-400 hover:text-white"
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-0.5">
+            {([[false, "À commander"], [true, "Tous"]] as const).map(([v, label]) => (
+              <button key={String(v)} onClick={() => setShowAll(v)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  showAll === v ? "bg-slate-600 text-white" : "text-slate-400 hover:text-white"
+                }`}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
