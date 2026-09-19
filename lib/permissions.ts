@@ -1,8 +1,8 @@
 // Centralised write-permission gate.
-// Editors (admin / director / site_director) can modify & delete everything.
+// Editors (admin / direction) can modify & delete everything.
 // Staff can only write the stock-counting tables. Everyone else is read-only.
 
-const EDITOR_ROLES = ["admin", "director", "site_director"]
+const EDITOR_ROLES = ["admin", "direction"]
 // Tables the "staff" role is allowed to write (stock counting saisies).
 const STAFF_WRITE_TABLES = ["count_sessions", "count_lines"]
 

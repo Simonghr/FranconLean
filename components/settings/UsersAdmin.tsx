@@ -10,11 +10,11 @@ import { useAuth } from "@/lib/context/AuthContext"
 interface Row { id: string; name: string | null; email: string | null; role: string }
 
 const ROLE_LABELS: Record<string, string> = {
-  admin: "Admin", director: "Directeur", site_director: "Directeur de site", manager: "Manager",
+  admin: "Admin", direction: "Direction", manager: "Manager",
   collaborator: "Collaborateur", staff: "Staff (comptage)",
 }
-const ROLES = ["admin", "director", "site_director", "manager", "collaborator", "staff"]
-const EDITORS = ["admin", "director", "site_director"]
+const ROLES = ["admin", "direction", "manager", "collaborator", "staff"]
+const EDITORS = ["admin", "direction"]
 
 async function callApi(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("manage-users", { body })
