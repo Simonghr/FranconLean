@@ -439,7 +439,7 @@ export default function CadencierPage() {
           </>}
           {canCount && <>
           <Button size="sm" variant="outline" onClick={() => { setForm({ ...nowParts(), first: "", last: "" }); setNewOpen(true) }}>
-            <FilePlus2 className="w-4 h-4 mr-1.5" /> Nouvelle saisie
+            <FilePlus2 className="w-4 h-4 mr-1.5" /> Cadencier
           </Button>
           <Button size="sm" onClick={() => setSaveOpen(true)} disabled={!active}>
             <Save className="w-4 h-4 mr-1.5" /> Enregistrer
@@ -524,7 +524,7 @@ export default function CadencierPage() {
 
       {!active && (
         <div className="bg-slate-800/50 border border-dashed border-slate-600 rounded-xl px-4 py-3 text-sm text-slate-400">
-          Aucune saisie en cours. Cliquez sur <span className="text-slate-200 font-medium">Nouvelle saisie</span> pour commencer à compter — les cases de quantité deviendront alors modifiables.
+          Aucune saisie en cours. Cliquez sur <span className="text-slate-200 font-medium">Cadencier</span> pour commencer à compter — les cases de quantité deviendront alors modifiables.
         </div>
       )}
 
@@ -834,7 +834,7 @@ export default function CadencierPage() {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4" onClick={() => setNewOpen(false)}>
           <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-6 space-y-4" onClick={e => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <FilePlus2 className="w-5 h-5 text-cyan-400" /> Nouvelle saisie
+              <FilePlus2 className="w-5 h-5 text-cyan-400" /> Cadencier
             </h3>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
