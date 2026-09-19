@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
-import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck, ShoppingCart, ChefHat, Pencil, ChevronUp, ChevronDown, ClipboardCheck, PackagePlus, PackageOpen, X, Coins } from "lucide-react"
+import { ClipboardList, Search, Plus, Trash2, GripVertical, PackageCheck, FilePlus2, Save, Check, Clock, User, History, Truck, ShoppingCart, ChefHat, Pencil, ChevronUp, ChevronDown, ClipboardCheck, PackagePlus, PackageOpen, X, Coins, Target } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -396,6 +396,11 @@ export default function CadencierPage() {
           <Link href="/cadencier/etat-stock">
             <Button variant="outline" size="sm">
               <Coins className="w-4 h-4 mr-1.5" /> État des stocks
+            </Button>
+          </Link>
+          <Link href="/cadencier/cibles">
+            <Button variant="outline" size="sm">
+              <Target className="w-4 h-4 mr-1.5" /> Stock cible
             </Button>
           </Link>
           <Link href="/cadencier/reception">

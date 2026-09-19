@@ -31,6 +31,8 @@ export default function CommandesPage() {
   // Manual overrides of the suggested order quantity (counting unit), by product id.
   const [override, setOverride] = useState<Record<string, number>>({})
   const [copied, setCopied] = useState<string | null>(null)
+  const [scenario, setScenario] = useState<"standard" | "high">("standard")
+  const targetOf = (p: Product) => (scenario === "high" ? p.target_high : p.target_stock)
 
   useEffect(() => {
     let alive = true
@@ -48,17 +50,18 @@ export default function CommandesPage() {
   }, [SITE_ID])
 
   const patchTarget = (id: string, v: number | null) => {
-    setProducts(prev => prev.map(p => p.id === id ? { ...p, target_stock: v } : p))
-    productsRepo.update(id, { target_stock: v }).catch(console.error)
+    const field = scenario === "high" ? "target_high" : "target_stock"
+    setProducts(prev => prev.map(p => p.id === id ? { ...p, [field]: v } : p))
+    productsRepo.update(id, { [field]: v }).catch(console.error)
   }
 
   // Build order rows grouped by supplier (only products with a target and a shortfall).
   const groups = useMemo(() => {
     const bySupplier = new Map<string, Row[]>()
     for (const p of products) {
-      if (p.target_stock == null) continue
+      const target = scenario === "high" ? p.target_high : p.target_stock
+      if (target == null) continue
       const onHand = counts[p.id] ?? 0
-      const target = p.target_stock
       const suggested = Math.max(0, target - onHand)
       const toOrder = override[p.id] ?? suggested
       if (toOrder <= 0) continue
@@ -70,7 +73,7 @@ export default function CommandesPage() {
     return [...bySupplier.entries()]
       .map(([supplier, rows]) => [supplier, rows.sort((a, b) => a.product.name.localeCompare(b.product.name))] as const)
       .sort((a, b) => a[0].localeCompare(b[0]))
-  }, [products, counts, override])
+  }, [products, counts, override, scenario])
 
   const copySupplier = (supplier: string, rows: Row[]) => {
     const today = new Date().toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" })
@@ -96,6 +99,16 @@ export default function CommandesPage() {
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <ClipboardCheck className="w-6 h-6 text-amber-400" /> Commandes
           </h1>
+        </div>
+        <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-0.5">
+          {([["standard", "Semaine standard"], ["high", "Forte période"]] as const).map(([s, label]) => (
+            <button key={s} onClick={() => { setScenario(s); setOverride({}) }}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                scenario === s ? (s === "high" ? "bg-amber-600 text-white" : "bg-cyan-600 text-white") : "text-slate-400 hover:text-white"
+              }`}>
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -143,7 +156,7 @@ export default function CommandesPage() {
                       <td className="px-3 py-2 text-slate-200">{r.product.name}</td>
                       <td className="px-2 py-2 text-right text-slate-400 whitespace-nowrap">{r.onHand}<span className="text-[10px] text-slate-600 ml-1">{r.product.unit ?? ""}</span></td>
                       <td className="px-2 py-2 text-right">
-                        <input defaultValue={r.target} inputMode="decimal"
+                        <input key={`${r.product.id}-${scenario}`} defaultValue={r.target} inputMode="decimal"
                           onBlur={e => patchTarget(r.product.id, parseNum(e.target.value))}
                           className="w-14 bg-transparent text-right text-slate-300 border-b border-slate-700/60 hover:border-slate-500 focus:border-cyan-500 focus:outline-none" />
                       </td>

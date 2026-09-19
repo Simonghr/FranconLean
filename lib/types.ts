@@ -177,6 +177,7 @@ export interface Product {
   price: number | null
   pack_size: number | null
   target_stock: number | null
+  target_high: number | null
   zone: string | null
   note: string | null
   position: number
