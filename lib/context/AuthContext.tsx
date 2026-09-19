@@ -2,6 +2,7 @@
 import { createContext, useContext, useEffect, useState } from "react"
 import type { User, SupabaseClient } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/client"
+import { setCurrentRole } from "@/lib/permissions"
 import type { UserRole } from "@/lib/types"
 
 async function ensureProfile(supabase: SupabaseClient, user: User) {
@@ -35,7 +36,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const supabase = createClient()
     const loadRole = async (u: User) => {
       const { data } = await supabase.from("profiles").select("role").eq("id", u.id).maybeSingle()
-      setRole((data?.role as UserRole) ?? null)
+      const r = (data?.role as UserRole) ?? null
+      setRole(r)
+      setCurrentRole(r)
     }
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user)
@@ -45,7 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
       setUser(session?.user ?? null)
       if (session?.user) { ensureProfile(supabase, session.user); loadRole(session.user) }
-      else setRole(null)
+      else { setRole(null); setCurrentRole(null) }
     })
     return () => subscription.unsubscribe()
   }, [])

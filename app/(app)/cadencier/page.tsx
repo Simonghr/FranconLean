@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import * as productsRepo from "@/lib/repositories/products"
 import { useSite } from "@/lib/context/SiteContext"
 import { useAuth } from "@/lib/context/AuthContext"
+import { canEditRole } from "@/lib/permissions"
 import type { Product, CountSession } from "@/lib/types"
 
 const NO_ZONE = "Sans zone"
@@ -31,8 +32,10 @@ type GroupBy = "zone" | "supplier"
 export default function CadencierPage() {
   const { siteId: SITE_ID } = useSite()
   const { role } = useAuth()
-  // Staff = counting only: no reorder, no add/edit/delete, no management sub-pages.
-  const canManage = role !== "staff"
+  // Management (add/edit/delete/reorder/sub-pages) : editors only.
+  // Counting (saisies) : editors + staff. Everyone else is read-only.
+  const canManage = canEditRole(role)
+  const canCount = canManage || role === "staff"
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -431,12 +434,14 @@ export default function CadencierPage() {
             <Plus className="w-4 h-4 mr-1.5" /> Produit
           </Button>
           </>}
+          {canCount && <>
           <Button size="sm" variant="outline" onClick={() => { setForm({ ...nowParts(), first: "", last: "" }); setNewOpen(true) }}>
             <FilePlus2 className="w-4 h-4 mr-1.5" /> Nouvelle saisie
           </Button>
           <Button size="sm" onClick={() => setSaveOpen(true)} disabled={!active}>
             <Save className="w-4 h-4 mr-1.5" /> Enregistrer
           </Button>
+          </>}
           </>)}
         </div>
       </div>
@@ -636,7 +641,7 @@ export default function CadencierPage() {
                       key={`${p.id}-${qty[p.id] ?? "e"}`}
                       ref={el => { qtyRefs.current[p.id] = el }}
                       defaultValue={qty[p.id] ?? ""}
-                      disabled={!active}
+                      disabled={!active || !canCount}
                       onBlur={e => { const v = parseNum(e.target.value); if (v !== (qty[p.id] ?? null)) setQuantity(p.id, v) }}
                       onKeyDown={e => {
                         if (e.key === "Enter") {
