@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import * as productsRepo from "@/lib/repositories/products"
 import { useSite } from "@/lib/context/SiteContext"
+import { useAuth } from "@/lib/context/AuthContext"
+import { canDeleteRole } from "@/lib/permissions"
 import type { Product, CountSession } from "@/lib/types"
 
 const NO_ZONE = "Sans zone"
@@ -22,6 +24,7 @@ function parseNum(v: string): number | null {
 
 export default function CadencierHistoriquePage() {
   const { siteId: SITE_ID } = useSite()
+  const canDelete = canDeleteRole(useAuth().role)
   const [products, setProducts] = useState<Product[]>([])
   const [sessions, setSessions] = useState<CountSession[]>([])
   const [loading, setLoading] = useState(true)
@@ -146,10 +149,10 @@ export default function CadencierHistoriquePage() {
                       {s.session_time && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{s.session_time}</span>}
                     </div>
                   </button>
-                  <button onClick={() => deleteSession(s)} title="Supprimer cette saisie"
+                  {canDelete && <button onClick={() => deleteSession(s)} title="Supprimer cette saisie"
                     className="px-2.5 self-stretch text-slate-600 hover:text-red-400 transition-colors">
                     <Trash2 className="w-4 h-4" />
-                  </button>
+                  </button>}
                 </div>
               )
             })}
@@ -182,10 +185,10 @@ export default function CadencierHistoriquePage() {
                       className={editing ? "bg-green-600 hover:bg-green-500" : ""}>
                       {editing ? <><Check className="w-4 h-4 mr-1.5" /> Terminer</> : <><Pencil className="w-4 h-4 mr-1.5" /> Modifier</>}
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => deleteSession(selected)}
+                    {canDelete && <Button size="sm" variant="outline" onClick={() => deleteSession(selected)}
                       className="border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300">
                       <Trash2 className="w-4 h-4" />
-                    </Button>
+                    </Button>}
                   </div>
                 </div>
 

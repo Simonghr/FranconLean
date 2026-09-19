@@ -7,6 +7,8 @@ import * as salesRepo from "@/lib/repositories/salesImports"
 import * as productsRepo from "@/lib/repositories/products"
 import * as recipesRepo from "@/lib/repositories/recipes"
 import { useSite } from "@/lib/context/SiteContext"
+import { useAuth } from "@/lib/context/AuthContext"
+import { canDeleteRole } from "@/lib/permissions"
 import type { Product, SalesImport, SalesLine, RollerAlias, RecipeLine } from "@/lib/types"
 
 function frDate(d: string | null) {
@@ -63,6 +65,7 @@ function extractRows(text: string): ParsedRow[] {
 
 export default function VentesPage() {
   const { siteId: SITE_ID } = useSite()
+  const canDelete = canDeleteRole(useAuth().role)
   const [products, setProducts] = useState<Product[]>([])
   const [imports, setImports] = useState<SalesImport[]>([])
   const [aliases, setAliases] = useState<Record<string, RollerAlias>>({})
@@ -257,7 +260,7 @@ export default function VentesPage() {
                       </span>
                     </div>
                   </button>
-                  <button onClick={() => deleteImport(imp)} className="px-2.5 self-stretch text-slate-600 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                  {canDelete && <button onClick={() => deleteImport(imp)} className="px-2.5 self-stretch text-slate-600 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>}
                 </div>
               )
             })}

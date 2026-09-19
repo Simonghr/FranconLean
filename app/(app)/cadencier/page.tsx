@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import * as productsRepo from "@/lib/repositories/products"
 import { useSite } from "@/lib/context/SiteContext"
 import { useAuth } from "@/lib/context/AuthContext"
-import { canEditRole } from "@/lib/permissions"
+import { canEditRole, canManageRole, canDeleteRole, canEditTargetsRole } from "@/lib/permissions"
 import type { Product, CountSession } from "@/lib/types"
 
 const NO_ZONE = "Sans zone"
@@ -32,10 +32,12 @@ type GroupBy = "zone" | "supplier"
 export default function CadencierPage() {
   const { siteId: SITE_ID } = useSite()
   const { role } = useAuth()
-  // Management (add/edit/delete/reorder/sub-pages) : editors only.
-  // Counting (saisies) : editors + staff. Everyone else is read-only.
-  const canManage = canEditRole(role)
-  const canCount = canManage || role === "staff"
+  // Management (add/edit/reorder/sub-pages) : editors + manager.
+  // Delete & stock targets : editors only. Counting : editors + manager + staff.
+  const canManage = canManageRole(role)
+  const canDelete = canDeleteRole(role)
+  const canEditTarget = canEditTargetsRole(role)
+  const canCount = canEditRole(role) || role === "manager" || role === "staff"
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
@@ -181,14 +183,15 @@ export default function CadencierPage() {
     const name = addForm.name.trim()
     if (!name) return
     const t = addForm.target.trim().replace(",", ".")
-    const patch = {
+    const patch: any = {
       name,
       supplier: modalConsommable ? "" : (addForm.supplier.trim() || "Divers"),
       zone: addForm.zone.trim() || null,
       unit: addForm.unit.trim() || null,
-      target_stock: t === "" ? null : (isNaN(Number(t)) ? null : Number(t)),
       temporary: addForm.temporary,
     }
+    // Only editors may set the stock target (managers must not touch it).
+    if (canEditTarget) patch.target_stock = t === "" ? null : (isNaN(Number(t)) ? null : Number(t))
     try {
       if (editId) {
         const updated = await productsRepo.update(editId, patch)
@@ -667,7 +670,7 @@ export default function CadencierPage() {
                       <Pencil className="w-4 h-4" />
                     </button>
                   )}
-                  {canManage && (
+                  {canDelete && (
                     <button onClick={() => deleteProduct(p)} className="text-slate-600 hover:text-red-400 transition-colors flex-shrink-0">
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -801,13 +804,15 @@ export default function CadencierPage() {
                     onChange={e => setAddForm(f => ({ ...f, unit: e.target.value }))}
                     placeholder="ex. bouteille, pièce…" />
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Stock cible</Label>
-                  <Input value={addForm.target} inputMode="decimal"
-                    onChange={e => setAddForm(f => ({ ...f, target: e.target.value }))}
-                    placeholder="ex. 24" />
-                  <p className="text-[11px] text-slate-500">Quantité souhaitée en rayon (pour les commandes).</p>
-                </div>
+                {canEditTarget && (
+                  <div className="space-y-1.5">
+                    <Label>Stock cible</Label>
+                    <Input value={addForm.target} inputMode="decimal"
+                      onChange={e => setAddForm(f => ({ ...f, target: e.target.value }))}
+                      placeholder="ex. 24" />
+                    <p className="text-[11px] text-slate-500">Quantité souhaitée en rayon (pour les commandes).</p>
+                  </div>
+                )}
               </div>
               <label className="flex items-center gap-2.5 cursor-pointer pt-1">
                 <input type="checkbox" checked={addForm.temporary}

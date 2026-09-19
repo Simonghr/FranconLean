@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label"
 import * as deliveriesRepo from "@/lib/repositories/deliveries"
 import * as productsRepo from "@/lib/repositories/products"
 import { useSite } from "@/lib/context/SiteContext"
+import { useAuth } from "@/lib/context/AuthContext"
+import { canDeleteRole } from "@/lib/permissions"
 import type { Product, Delivery, DeliveryLine } from "@/lib/types"
 
 function frDate(d: string | null) {
@@ -22,6 +24,7 @@ function parseNum(v: string): number | null {
 
 export default function ReceptionPage() {
   const { siteId: SITE_ID } = useSite()
+  const canDelete = canDeleteRole(useAuth().role)
   const [products, setProducts] = useState<Product[]>([])
   const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [loading, setLoading] = useState(true)
@@ -220,7 +223,7 @@ export default function ReceptionPage() {
                       </span>
                     </div>
                   </button>
-                  <button onClick={() => deleteDelivery(d)} className="px-2.5 self-stretch text-slate-600 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                  {canDelete && <button onClick={() => deleteDelivery(d)} className="px-2.5 self-stretch text-slate-600 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>}
                 </div>
               )
             })}
@@ -312,7 +315,7 @@ export default function ReceptionPage() {
                                   onChange={e => patchLine(l.id, { ignored: e.target.checked })} className="w-4 h-4 accent-slate-500" />
                               </td>
                               <td className="px-2 py-2 text-right">
-                                {!isValidated && <button onClick={() => removeLine(l.id)} className="text-slate-600 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>}
+                                {!isValidated && canDelete && <button onClick={() => removeLine(l.id)} className="text-slate-600 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>}
                               </td>
                             </tr>
                           )

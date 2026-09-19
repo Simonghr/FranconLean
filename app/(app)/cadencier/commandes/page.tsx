@@ -5,6 +5,8 @@ import { ClipboardCheck, ArrowLeft, Copy, Check, Truck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import * as productsRepo from "@/lib/repositories/products"
 import { useSite } from "@/lib/context/SiteContext"
+import { useAuth } from "@/lib/context/AuthContext"
+import { canEditTargetsRole } from "@/lib/permissions"
 import type { Product } from "@/lib/types"
 
 function parseNum(v: string): number | null {
@@ -24,6 +26,8 @@ interface Row {
 
 export default function CommandesPage() {
   const { siteId: SITE_ID } = useSite()
+  const { role } = useAuth()
+  const canEditTarget = canEditTargetsRole(role)
   const [products, setProducts] = useState<Product[]>([])
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [hasCount, setHasCount] = useState(true)
@@ -157,8 +161,9 @@ export default function CommandesPage() {
                       <td className="px-2 py-2 text-right text-slate-400 whitespace-nowrap">{r.onHand}<span className="text-[10px] text-slate-600 ml-1">{r.product.unit ?? ""}</span></td>
                       <td className="px-2 py-2 text-right">
                         <input key={`${r.product.id}-${scenario}`} defaultValue={r.target} inputMode="decimal"
+                          disabled={!canEditTarget}
                           onBlur={e => patchTarget(r.product.id, parseNum(e.target.value))}
-                          className="w-14 bg-transparent text-right text-slate-300 border-b border-slate-700/60 hover:border-slate-500 focus:border-cyan-500 focus:outline-none" />
+                          className="w-14 bg-transparent text-right text-slate-300 border-b border-slate-700/60 hover:border-slate-500 focus:border-cyan-500 focus:outline-none disabled:opacity-60 disabled:cursor-not-allowed" />
                       </td>
                       <td className="px-2 py-2 text-right whitespace-nowrap">
                         <input key={`${r.product.id}-${r.toOrder}`} defaultValue={r.toOrder} inputMode="decimal"

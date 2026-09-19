@@ -9,6 +9,8 @@ import * as recipesRepo from "@/lib/repositories/recipes"
 import * as productsRepo from "@/lib/repositories/products"
 import * as salesRepo from "@/lib/repositories/salesImports"
 import { useSite } from "@/lib/context/SiteContext"
+import { useAuth } from "@/lib/context/AuthContext"
+import { canDeleteRole } from "@/lib/permissions"
 import type { Product, RecipeLine } from "@/lib/types"
 
 function parseNum(v: string): number {
@@ -19,6 +21,7 @@ function parseNum(v: string): number {
 
 export default function RecettesPage() {
   const { siteId: SITE_ID } = useSite()
+  const canDelete = canDeleteRole(useAuth().role)
   const [products, setProducts] = useState<Product[]>([])
   const [lines, setLines] = useState<RecipeLine[]>([])
   const [rollerNames, setRollerNames] = useState<string[]>([])
@@ -153,7 +156,7 @@ export default function RecettesPage() {
                     <div className="text-sm font-semibold text-white truncate">{rn}</div>
                     <div className="text-xs text-slate-400 mt-0.5">{ls.length} ingrédient{ls.length > 1 ? "s" : ""}</div>
                   </button>
-                  <button onClick={() => deleteRecipe(rn)} className="px-2.5 self-stretch text-slate-600 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                  {canDelete && <button onClick={() => deleteRecipe(rn)} className="px-2.5 self-stretch text-slate-600 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4" /></button>}
                 </div>
               )
             })}
@@ -199,7 +202,7 @@ export default function RecettesPage() {
                             </td>
                             <td className="px-2 py-2 text-slate-500 text-xs">{p?.unit ?? ""}</td>
                             <td className="px-2 py-2 text-right">
-                              <button onClick={() => removeLine(l.id)} className="text-slate-600 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>
+                              {canDelete && <button onClick={() => removeLine(l.id)} className="text-slate-600 hover:text-red-400"><Trash2 className="w-3.5 h-3.5" /></button>}
                             </td>
                           </tr>
                         )

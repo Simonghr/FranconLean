@@ -1,5 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr'
-import { canWriteTable } from '@/lib/permissions'
+import { canWrite } from '@/lib/permissions'
 
 const raw = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,8 +15,8 @@ function guardedFrom(table: string) {
   for (const m of MUTATORS) {
     const orig = qb[m].bind(qb)
     qb[m] = (...args: any[]) => {
-      if (!canWriteTable(table)) {
-        throw new Error("Action non autorisée : votre rôle est en lecture seule.")
+      if (!canWrite(m, table, args[0])) {
+        throw new Error("Action non autorisée pour votre rôle.")
       }
       return orig(...args)
     }
