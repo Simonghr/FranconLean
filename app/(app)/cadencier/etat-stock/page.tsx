@@ -21,7 +21,6 @@ interface Row { product: Product; qty: number; price: number | null; value: numb
 export default function EtatStockPage() {
   const { siteId: SITE_ID } = useSite()
   const [products, setProducts] = useState<Product[]>([])
-  const [counts, setCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -29,11 +28,8 @@ export default function EtatStockPage() {
     setLoading(true)
     ;(async () => {
       try {
-        const [prods, latest] = await Promise.all([
-          productsRepo.getAll(SITE_ID), productsRepo.getLatestCounts(SITE_ID),
-        ])
-        if (!alive) return
-        setProducts(prods); setCounts(latest)
+        const prods = await productsRepo.getAll(SITE_ID)
+        if (alive) setProducts(prods)
       } catch (e) { console.error(e) } finally { if (alive) setLoading(false) }
     })()
     return () => { alive = false }
@@ -44,8 +40,8 @@ export default function EtatStockPage() {
     productsRepo.update(id, { unit_price: v }).catch(console.error)
   }
 
-  // Current qty: F&B → last validated count; consumables → theoretical stock.
-  const qtyOf = (p: Product) => (p.department === "consommable" ? (p.stock ?? 0) : (counts[p.id] ?? 0))
+  // Live theoretical stock = last count (recalibration) + réceptions − ventes.
+  const qtyOf = (p: Product) => p.stock ?? 0
 
   const groups = useMemo(() => {
     const bySupplier = new Map<string, Row[]>()
@@ -62,7 +58,7 @@ export default function EtatStockPage() {
     return [...bySupplier.entries()]
       .map(([k, rows]) => [k, rows.sort((a, b) => a.product.name.localeCompare(b.product.name))] as const)
       .sort((a, b) => a[0].localeCompare(b[0]))
-  }, [products, counts])
+  }, [products])
 
   const total = useMemo(
     () => groups.reduce((s, [, rows]) => s + rows.reduce((t, r) => t + (r.value ?? 0), 0), 0),
@@ -70,7 +66,7 @@ export default function EtatStockPage() {
   )
   const missing = useMemo(
     () => products.filter(p => qtyOf(p) > 0 && p.unit_price == null).length,
-    [products, counts]
+    [products]
   )
 
   if (loading) return <div className="text-center py-20 text-slate-500">Chargement…</div>
@@ -93,8 +89,9 @@ export default function EtatStockPage() {
       </div>
 
       <p className="text-xs text-slate-500">
-        Valeur = <span className="text-slate-300">stock × prix unitaire</span>. Le stock F&B vient du dernier comptage validé,
-        les consommables de leur stock courant. Les prix sont modifiables (clic sur la valeur).
+        Valeur = <span className="text-slate-300">stock × prix unitaire</span>. Le stock est le
+        <span className="text-slate-300"> stock théorique live</span> : dernière saisie du cadencier, ajustée en continu par les
+        réceptions (+) et les ventes (−). Les prix sont modifiables (clic sur la valeur).
       </p>
 
       {missing > 0 && (

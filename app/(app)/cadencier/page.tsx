@@ -164,6 +164,15 @@ export default function CadencierPage() {
       const missing = deptProducts.filter(p => qty[p.id] == null)
       await Promise.all(missing.map(p => productsRepo.setLine(session.id, p.id, 0)))
       await productsRepo.updateSession(session.id, { status: "validated" })
+      // Recalibrate the live theoretical stock to the physical count, so the
+      // "État des stocks" reflects: dernier comptage + réceptions − ventes.
+      await Promise.all(deptProducts.map(p => {
+        const counted = qty[p.id] ?? 0
+        return (p.stock ?? null) === counted ? Promise.resolve() : productsRepo.update(p.id, { stock: counted })
+      }))
+      setProducts(prev => prev.map(p =>
+        deptProducts.some(d => d.id === p.id) ? { ...p, stock: qty[p.id] ?? 0 } : p
+      ))
     } catch (e) { console.error(e) }
     setSession(null)
     setQty({})
