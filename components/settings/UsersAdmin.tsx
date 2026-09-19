@@ -14,7 +14,6 @@ const ROLE_LABELS: Record<string, string> = {
   staff: "Staff (comptage)",
 }
 const ROLES = ["admin", "direction", "manager", "staff"]
-const EDITORS = ["admin", "direction"]
 
 async function callApi(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("manage-users", { body })
@@ -29,8 +28,8 @@ async function callApi(body: Record<string, unknown>) {
 
 export function UsersAdmin() {
   const { role } = useAuth()
-  // Only editors (admin / director / site_director) manage users.
-  const canManage = !!role && EDITORS.includes(role)
+  // User management is reserved to admins.
+  const canManage = role === "admin"
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
