@@ -121,13 +121,11 @@ export default function CommandesPage() {
         <span className="text-slate-300"> cible − dernier comptage</span>, regroupée par fournisseur. Ajustez une quantité si besoin, puis copiez la commande.
       </p>
 
-      {!hasCount && (
-        <div className="text-sm text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
-          Aucune saisie validée trouvée : le stock actuel est considéré à 0. Validez une saisie dans le cadencier pour un calcul fiable.
+      {!hasCount ? (
+        <div className="bg-slate-800/50 border border-dashed border-slate-600 rounded-xl px-4 py-8 text-center text-slate-400">
+          Aucune saisie validée pour l&apos;instant. Effectuez et validez une <span className="text-slate-200">saisie du cadencier</span> pour générer les commandes.
         </div>
-      )}
-
-      {groups.length === 0 ? (
+      ) : groups.length === 0 ? (
         <div className="bg-slate-800/50 border border-dashed border-slate-600 rounded-xl px-4 py-8 text-center text-slate-400">
           Rien à commander. Définissez un <span className="text-slate-200">stock cible</span> sur vos produits (bouton ✏️ dans le cadencier) pour générer les commandes.
         </div>
