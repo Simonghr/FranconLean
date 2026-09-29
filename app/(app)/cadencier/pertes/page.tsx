@@ -23,6 +23,9 @@ function parseNum(v: string): number | null {
   const n = Number(t)
   return isNaN(n) ? null : n
 }
+function eur(n: number) {
+  return n.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €"
+}
 
 export default function PertesPage() {
   const { siteId: SITE_ID } = useSite()
@@ -111,6 +114,17 @@ export default function PertesPage() {
     } catch (e) { console.error(e) }
   }
 
+  // Cost of a loss = quantity × the product's unit price (if known).
+  const costOf = (l: StockLoss) => {
+    const price = l.product_id ? productById.get(l.product_id)?.unit_price : null
+    return price != null ? l.quantity * price : null
+  }
+  const totalCost = useMemo(
+    () => losses.reduce((s, l) => s + (costOf(l) ?? 0), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [losses, products]
+  )
+
   if (loading) return <div className="text-center py-20 text-slate-500">Chargement…</div>
 
   return (
@@ -124,7 +138,15 @@ export default function PertesPage() {
             <TrendingDown className="w-6 h-6 text-red-400" /> Pertes
           </h1>
         </div>
-        <Button size="sm" onClick={openNew}><Plus className="w-4 h-4 mr-1.5" /> Nouvelle perte</Button>
+        <div className="flex items-center gap-4 flex-wrap">
+          {losses.length > 0 && (
+            <div className="text-right">
+              <div className="text-[11px] text-slate-500 uppercase tracking-wider">Coût total des pertes</div>
+              <div className="text-xl font-bold text-red-400">{eur(totalCost)}</div>
+            </div>
+          )}
+          <Button size="sm" onClick={openNew}><Plus className="w-4 h-4 mr-1.5" /> Nouvelle perte</Button>
+        </div>
       </div>
 
       <p className="text-xs text-slate-500">
@@ -144,6 +166,7 @@ export default function PertesPage() {
                   <th className="text-left px-3 py-2 font-semibold">Date</th>
                   <th className="text-left px-2 py-2 font-semibold">Produit</th>
                   <th className="text-right px-2 py-2 font-semibold text-red-400">Quantité</th>
+                  <th className="text-right px-2 py-2 font-semibold">Coût</th>
                   <th className="text-left px-2 py-2 font-semibold">Motif</th>
                   <th className="w-8"></th>
                 </tr>
@@ -155,6 +178,9 @@ export default function PertesPage() {
                     <td className="px-2 py-2 text-slate-200">{l.product_name ?? "—"}</td>
                     <td className="px-2 py-2 text-right text-red-300 font-semibold whitespace-nowrap">
                       {l.quantity}<span className="text-[10px] text-slate-500 ml-1">{l.unit ?? ""}</span>
+                    </td>
+                    <td className="px-2 py-2 text-right whitespace-nowrap">
+                      {costOf(l) != null ? <span className="text-slate-200 font-medium">{eur(costOf(l)!)}</span> : <span className="text-slate-600">—</span>}
                     </td>
                     <td className="px-2 py-2 text-slate-300">{l.reason ?? "—"}</td>
                     <td className="px-2 py-2 text-right">
