@@ -261,6 +261,17 @@ export interface SalesImport {
   updated_at: string
 }
 
+export interface StockLoss {
+  id: string
+  site_id: string
+  product_id: string | null
+  product_name: string | null
+  quantity: number
+  unit: string | null
+  reason: string | null
+  created_at: string
+}
+
 export interface RecipeLine {
   id: string
   site_id: string
