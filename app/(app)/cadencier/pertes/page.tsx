@@ -31,7 +31,7 @@ export default function PertesPage() {
   const [losses, setLosses] = useState<StockLoss[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ productId: "", qty: "", unit: "", reason: "" })
+  const [form, setForm] = useState({ productId: "", qty: "", reason: "", date: "", time: "" })
   const [saving, setSaving] = useState(false)
 
   const productOptions = useMemo(
@@ -57,24 +57,32 @@ export default function PertesPage() {
     return () => { alive = false }
   }, [SITE_ID])
 
-  const openNew = () => { setForm({ productId: "", qty: "", unit: "", reason: "" }); setOpen(true) }
-
-  // Fill the unit from the chosen product (still editable).
-  const chooseProduct = (id: string) => {
-    const p = productById.get(id)
-    setForm(f => ({ ...f, productId: id, unit: f.unit || (p?.unit ?? "") }))
+  const openNew = () => {
+    const d = new Date()
+    setForm({
+      productId: "", qty: "", reason: "",
+      date: d.toLocaleDateString("en-CA", { timeZone: "Europe/Paris" }),
+      time: d.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }),
+    })
+    setOpen(true)
   }
+
+  const selProduct = productById.get(form.productId)
 
   const submit = async () => {
     const p = productById.get(form.productId)
     if (!p) { window.alert("Sélectionnez un produit."); return }
     const q = parseNum(form.qty)
     if (q == null || q <= 0) { window.alert("Indiquez une quantité valide."); return }
+    // Combine the chosen date + time into a timestamp (fallback: now).
+    const createdAt = form.date
+      ? new Date(`${form.date}T${form.time || "00:00"}:00`).toISOString()
+      : new Date().toISOString()
     setSaving(true)
     try {
       const created = await lossesRepo.create({
         site_id: SITE_ID, product_id: p.id, product_name: p.name,
-        quantity: q, unit: form.unit.trim() || p.unit || null, reason: form.reason.trim() || null,
+        quantity: q, unit: p.unit || null, reason: form.reason.trim() || null, created_at: createdAt,
       })
       // Deduct from the theoretical stock so the "État des stocks" stays accurate.
       const newStock = (p.stock ?? 0) - q
@@ -170,21 +178,29 @@ export default function PertesPage() {
             <div className="space-y-3">
               <div className="space-y-1.5">
                 <Label>Produit</Label>
-                <select value={form.productId} onChange={e => chooseProduct(e.target.value)}
+                <select value={form.productId} onChange={e => setForm(f => ({ ...f, productId: e.target.value }))}
                   className="w-full text-sm px-3 py-2 rounded-lg border bg-slate-800 text-slate-200 border-slate-700 focus:outline-none focus:border-red-500">
                   <option value="">— sélectionner —</option>
                   {productOptions.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
+              <div className="space-y-1.5">
+                <Label>Quantité{selProduct?.unit ? ` (en ${selProduct.unit})` : ""}</Label>
+                <div className="flex items-center gap-2">
+                  <Input value={form.qty} inputMode="decimal" autoFocus
+                    onChange={e => setForm(f => ({ ...f, qty: e.target.value }))} placeholder="ex. 3" className="flex-1" />
+                  <span className="text-sm text-slate-400 min-w-14">{selProduct?.unit ?? ""}</span>
+                </div>
+                <p className="text-[11px] text-slate-500">Même unité que le cadencier (ex. flan : 1 part = 0,17 pièce).</p>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label>Quantité</Label>
-                  <Input value={form.qty} inputMode="decimal" autoFocus
-                    onChange={e => setForm(f => ({ ...f, qty: e.target.value }))} placeholder="ex. 3" />
+                  <Label>Date</Label>
+                  <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Unité</Label>
-                  <Input value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} placeholder="ex. pièce" />
+                  <Label>Heure</Label>
+                  <Input type="time" value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))} />
                 </div>
               </div>
               <div className="space-y-1.5">

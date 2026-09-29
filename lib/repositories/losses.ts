@@ -11,7 +11,7 @@ export async function list(site_id: string): Promise<StockLoss[]> {
 
 export async function create(
   data: Pick<StockLoss, 'site_id' | 'quantity'> &
-    Partial<Pick<StockLoss, 'product_id' | 'product_name' | 'unit' | 'reason'>>
+    Partial<Pick<StockLoss, 'product_id' | 'product_name' | 'unit' | 'reason' | 'created_at'>>
 ): Promise<StockLoss> {
   const { data: result, error } = await supabase.from('stock_losses').insert(data).select().single()
   if (error) throw error
