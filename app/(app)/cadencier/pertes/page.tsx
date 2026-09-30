@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
-import { TrendingDown, ArrowLeft, Plus, Trash2, X } from "lucide-react"
+import { TrendingDown, ArrowLeft, Plus, Trash2, X, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -36,6 +36,9 @@ export default function PertesPage() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ productId: "", qty: "", reason: "", date: "", time: "" })
   const [saving, setSaving] = useState(false)
+  const [from, setFrom] = useState("")
+  const [to, setTo] = useState("")
+  const [view, setView] = useState<"list" | "product" | "reason">("list")
 
   const productOptions = useMemo(
     () => [...products].sort((a, b) => (a.name).localeCompare(b.name)),
@@ -119,11 +122,73 @@ export default function PertesPage() {
     const price = l.product_id ? productById.get(l.product_id)?.unit_price : null
     return price != null ? l.quantity * price : null
   }
+
+  const setThisMonth = () => {
+    const d = new Date()
+    const first = new Date(d.getFullYear(), d.getMonth(), 1)
+    setFrom(first.toLocaleDateString("en-CA"))
+    setTo(d.toLocaleDateString("en-CA"))
+  }
+
+  // Losses within the selected period (inclusive by day).
+  const filtered = useMemo(() => losses.filter(l => {
+    const day = l.created_at.slice(0, 10)
+    if (from && day < from) return false
+    if (to && day > to) return false
+    return true
+  }), [losses, from, to])
+
   const totalCost = useMemo(
-    () => losses.reduce((s, l) => s + (costOf(l) ?? 0), 0),
+    () => filtered.reduce((s, l) => s + (costOf(l) ?? 0), 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [losses, products]
+    [filtered, products]
   )
+
+  // Aggregations for the grouped views.
+  const byProduct = useMemo(() => {
+    const m = new Map<string, { name: string; unit: string | null; qty: number; cost: number; n: number }>()
+    for (const l of filtered) {
+      const key = l.product_id ?? l.product_name ?? "—"
+      const g = m.get(key) ?? { name: l.product_name ?? "—", unit: l.unit, qty: 0, cost: 0, n: 0 }
+      g.qty += l.quantity; g.cost += costOf(l) ?? 0; g.n += 1
+      m.set(key, g)
+    }
+    return [...m.values()].sort((a, b) => b.cost - a.cost || b.qty - a.qty)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, products])
+
+  const byReason = useMemo(() => {
+    const m = new Map<string, { reason: string; cost: number; n: number }>()
+    for (const l of filtered) {
+      const key = (l.reason ?? "").trim() || "Sans motif"
+      const g = m.get(key) ?? { reason: key, cost: 0, n: 0 }
+      g.cost += costOf(l) ?? 0; g.n += 1
+      m.set(key, g)
+    }
+    return [...m.values()].sort((a, b) => b.cost - a.cost || b.n - a.n)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, products])
+
+  const exportCSV = () => {
+    const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`
+    const header = ["Date", "Heure", "Produit", "Quantité", "Unité", "Coût (€)", "Motif"]
+    const lines = filtered.map(l => {
+      const d = new Date(l.created_at)
+      const cost = costOf(l)
+      return [
+        d.toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }),
+        d.toLocaleTimeString("fr-FR", { timeZone: "Europe/Paris", hour: "2-digit", minute: "2-digit" }),
+        l.product_name ?? "", l.quantity, l.unit ?? "",
+        cost != null ? cost.toFixed(2).replace(".", ",") : "", l.reason ?? "",
+      ].map(esc).join(";")
+    })
+    const csv = "﻿" + [header.map(esc).join(";"), ...lines].join("\r\n")
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url; a.download = `pertes_${from || "debut"}_${to || "fin"}.csv`
+    a.click(); URL.revokeObjectURL(url)
+  }
 
   if (loading) return <div className="text-center py-20 text-slate-500">Chargement…</div>
 
@@ -139,12 +204,10 @@ export default function PertesPage() {
           </h1>
         </div>
         <div className="flex items-center gap-4 flex-wrap">
-          {losses.length > 0 && (
-            <div className="text-right">
-              <div className="text-[11px] text-slate-500 uppercase tracking-wider">Coût total des pertes</div>
-              <div className="text-xl font-bold text-red-400">{eur(totalCost)}</div>
-            </div>
-          )}
+          <div className="text-right">
+            <div className="text-[11px] text-slate-500 uppercase tracking-wider">Coût des pertes {from || to ? "(période)" : "(total)"}</div>
+            <div className="text-xl font-bold text-red-400">{eur(totalCost)}</div>
+          </div>
           <Button size="sm" onClick={openNew}><Plus className="w-4 h-4 mr-1.5" /> Nouvelle perte</Button>
         </div>
       </div>
@@ -153,11 +216,35 @@ export default function PertesPage() {
         Recensez les pertes (casse, périmé, erreur…). Chaque perte est <span className="text-slate-300">déduite du stock théorique</span> du produit.
       </p>
 
-      {losses.length === 0 ? (
-        <div className="bg-slate-800/50 border border-dashed border-slate-600 rounded-xl px-4 py-8 text-center text-slate-400">
-          Aucune perte enregistrée. Cliquez sur <span className="text-slate-200">Nouvelle perte</span>.
+      {/* Filters / views / export */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <label className="flex items-center gap-1.5 text-sm text-slate-400">Du
+          <Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="h-8 w-auto" /></label>
+        <label className="flex items-center gap-1.5 text-sm text-slate-400">Au
+          <Input type="date" value={to} onChange={e => setTo(e.target.value)} className="h-8 w-auto" /></label>
+        <Button size="sm" variant="outline" onClick={setThisMonth}>Ce mois</Button>
+        {(from || to) && <Button size="sm" variant="outline" onClick={() => { setFrom(""); setTo("") }}>Tout</Button>}
+        <div className="flex items-center gap-1 bg-slate-800 border border-slate-700 rounded-lg p-0.5">
+          {([["list", "Liste"], ["product", "Par produit"], ["reason", "Par motif"]] as const).map(([v, label]) => (
+            <button key={v} onClick={() => setView(v)}
+              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${view === v ? "bg-red-600 text-white" : "text-slate-400 hover:text-white"}`}>
+              {label}
+            </button>
+          ))}
         </div>
-      ) : (
+        <Button size="sm" variant="outline" onClick={exportCSV} disabled={filtered.length === 0}>
+          <Download className="w-4 h-4 mr-1.5" /> Exporter
+        </Button>
+        <span className="text-xs text-slate-500 ml-auto">{filtered.length} perte{filtered.length > 1 ? "s" : ""}</span>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="bg-slate-800/50 border border-dashed border-slate-600 rounded-xl px-4 py-8 text-center text-slate-400">
+          {losses.length === 0
+            ? <>Aucune perte enregistrée. Cliquez sur <span className="text-slate-200">Nouvelle perte</span>.</>
+            : "Aucune perte sur cette période."}
+        </div>
+      ) : view === "list" ? (
         <div className="bg-slate-800/40 border border-slate-700 rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -172,7 +259,7 @@ export default function PertesPage() {
                 </tr>
               </thead>
               <tbody>
-                {losses.map(l => (
+                {filtered.map(l => (
                   <tr key={l.id} className="border-b border-slate-700/40">
                     <td className="px-3 py-2 text-slate-400 whitespace-nowrap">{frDateTime(l.created_at)}</td>
                     <td className="px-2 py-2 text-slate-200">{l.product_name ?? "—"}</td>
@@ -191,6 +278,50 @@ export default function PertesPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      ) : view === "product" ? (
+        <div className="bg-slate-800/40 border border-slate-700 rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-700 text-[11px] text-slate-500 uppercase tracking-wider">
+                <th className="text-left px-3 py-2 font-semibold">Produit</th>
+                <th className="text-right px-2 py-2 font-semibold text-red-400">Quantité</th>
+                <th className="text-right px-2 py-2 font-semibold">Occurrences</th>
+                <th className="text-right px-3 py-2 font-semibold">Coût</th>
+              </tr>
+            </thead>
+            <tbody>
+              {byProduct.map((g, i) => (
+                <tr key={i} className="border-b border-slate-700/40">
+                  <td className="px-3 py-2 text-slate-200">{g.name}</td>
+                  <td className="px-2 py-2 text-right text-red-300 font-semibold whitespace-nowrap">{Math.round(g.qty * 100) / 100}<span className="text-[10px] text-slate-500 ml-1">{g.unit ?? ""}</span></td>
+                  <td className="px-2 py-2 text-right text-slate-400">{g.n}</td>
+                  <td className="px-3 py-2 text-right font-medium text-slate-200">{g.cost > 0 ? eur(g.cost) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="bg-slate-800/40 border border-slate-700 rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-700 text-[11px] text-slate-500 uppercase tracking-wider">
+                <th className="text-left px-3 py-2 font-semibold">Motif</th>
+                <th className="text-right px-2 py-2 font-semibold">Occurrences</th>
+                <th className="text-right px-3 py-2 font-semibold">Coût</th>
+              </tr>
+            </thead>
+            <tbody>
+              {byReason.map((g, i) => (
+                <tr key={i} className="border-b border-slate-700/40">
+                  <td className="px-3 py-2 text-slate-200">{g.reason}</td>
+                  <td className="px-2 py-2 text-right text-slate-400">{g.n}</td>
+                  <td className="px-3 py-2 text-right font-medium text-slate-200">{g.cost > 0 ? eur(g.cost) : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
