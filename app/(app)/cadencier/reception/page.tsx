@@ -1,10 +1,11 @@
 "use client"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import Link from "next/link"
-import { Truck, ArrowLeft, Plus, Trash2, Check, FileText, PackagePlus } from "lucide-react"
+import { Truck, ArrowLeft, Plus, Trash2, Check, FileText, PackagePlus, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { supabase } from "@/lib/supabase"
 import * as deliveriesRepo from "@/lib/repositories/deliveries"
 import * as productsRepo from "@/lib/repositories/products"
 import { useSite } from "@/lib/context/SiteContext"
@@ -22,6 +23,58 @@ function parseNum(v: string): number | null {
   return isNaN(n) ? null : n
 }
 
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result))
+    r.onerror = () => reject(r.error)
+    r.readAsDataURL(file)
+  })
+}
+
+type ParsedLine = { raw_label: string; raw_ref: string | null; raw_qty: number | null }
+
+// Best-effort extraction of a delivery note / invoice from its raw text.
+// Supplier layouts vary a lot, so this gives a starting point the user then
+// corrects — associations are remembered at validation for next time.
+function parseInvoice(text: string, suppliers: string[]) {
+  const up = text.toUpperCase()
+
+  let supplier = ""
+  for (const s of suppliers) {
+    if (s && up.includes(s.toUpperCase())) { supplier = s; break }
+  }
+
+  let delivery_date: string | null = null
+  const dm = text.match(/(\d{2})[/.\- ](\d{2})[/.\- ](\d{2,4})/)
+  if (dm) {
+    let y = dm[3]
+    if (y.length === 2) y = "20" + y
+    delivery_date = `${y}-${dm[2]}-${dm[1]}`
+  }
+
+  let invoice_number: string | null = null
+  const im = text.match(/(?:facture|bon de livraison|\bBL\b|\bBC\b|n[°o])\s*[:#]?\s*([A-Z0-9][A-Z0-9\-/]{3,})/i)
+  if (im) invoice_number = im[1]
+
+  const lines: ParsedLine[] = []
+  for (const raw of text.split(/\r?\n/)) {
+    const l = raw.trim()
+    if (l.length < 4) continue
+    const letters = (l.match(/[A-Za-zÀ-ÿ]/g) || []).length
+    if (letters < 3) continue
+    if (!/\d/.test(l)) continue // an item line carries at least a quantity
+    const refM = l.match(/\b(?=[A-Z0-9][A-Z0-9\-]*\d)[A-Z0-9\-]{4,}\b/)
+    const qtyM = l.match(/\b(\d{1,3})(?:[,.]\d+)?\b/)
+    lines.push({
+      raw_label: l,
+      raw_ref: refM ? refM[0] : null,
+      raw_qty: qtyM ? parseNum(qtyM[0]) : null,
+    })
+  }
+  return { supplier, delivery_date, invoice_number, lines }
+}
+
 export default function ReceptionPage() {
   const { siteId: SITE_ID } = useSite()
   const canDelete = canDeleteRole(useAuth().role)
@@ -32,6 +85,8 @@ export default function ReceptionPage() {
   const [lines, setLines] = useState<DeliveryLine[]>([])
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [validating, setValidating] = useState(false)
+  const [importing, setImporting] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const productById = useMemo(() => {
     const m = new Map<string, Product>()
@@ -87,6 +142,56 @@ export default function ReceptionPage() {
       setDeliveries(prev => [d, ...prev])
       setSelected(d); setLines([])
     } catch (e: any) { console.error(e); window.alert(`Erreur : ${e?.message ?? e}`) }
+  }
+
+  // Import a delivery note (PDF) → extract text server-side (no AI, free) →
+  // pre-fill a draft delivery with header + candidate lines to correct.
+  const importPdf = async (file: File) => {
+    setImporting(true)
+    try {
+      const dataUrl = await readFileAsBase64(file)
+      const { data, error } = await supabase.functions.invoke("extract-delivery", { body: { pdf_base64: dataUrl } })
+      if (error) throw error
+      if (!data?.ok) throw new Error(data?.error || "Extraction du PDF impossible.")
+      const suppliers = [...new Set(products.map(p => p.supplier).filter(Boolean))] as string[]
+      const parsed = parseInvoice(String(data.text ?? ""), suppliers)
+      if (parsed.lines.length === 0) throw new Error("Aucune ligne détectée dans ce PDF. Saisie manuelle possible.")
+
+      const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" })
+      const d = await deliveriesRepo.create({
+        site_id: SITE_ID,
+        supplier: parsed.supplier || "",
+        delivery_date: parsed.delivery_date || today,
+        invoice_number: parsed.invoice_number || undefined,
+        source_file: file.name,
+      })
+
+      // Auto-match lines to products via remembered supplier references.
+      const refs = parsed.supplier ? await deliveriesRepo.getRefs(SITE_ID, parsed.supplier) : {}
+      const created: DeliveryLine[] = []
+      for (const ln of parsed.lines) {
+        const product_id = ln.raw_ref && refs[ln.raw_ref] ? refs[ln.raw_ref] : undefined
+        const l = await deliveriesRepo.addLine(d.id, {
+          raw_label: ln.raw_label,
+          raw_ref: ln.raw_ref ?? undefined,
+          raw_qty: ln.raw_qty ?? undefined,
+          product_id,
+        })
+        created.push(l)
+      }
+
+      setDeliveries(prev => [d, ...prev])
+      setSelected(d)
+      setLines(created)
+      const matched = created.filter(l => l.product_id).length
+      window.alert(`PDF importé : ${created.length} ligne(s) détectée(s), ${matched} associée(s) automatiquement.\nVérifiez les produits, colis et colisage avant de valider.`)
+    } catch (e: any) {
+      console.error(e)
+      window.alert(`Import impossible : ${e?.message ?? e}`)
+    } finally {
+      setImporting(false)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+    }
   }
 
   const patchHeader = (patch: Partial<Delivery>) => {
@@ -196,12 +301,24 @@ export default function ReceptionPage() {
             <Truck className="w-6 h-6 text-emerald-400" /> Réceptions
           </h1>
         </div>
-        <Button size="sm" onClick={newDelivery}><Plus className="w-4 h-4 mr-1.5" /> Nouvelle réception</Button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf,.pdf"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) void importPdf(f) }}
+          />
+          <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+            <Upload className="w-4 h-4 mr-1.5" /> {importing ? "Import…" : "Importer PDF"}
+          </Button>
+          <Button size="sm" onClick={newDelivery}><Plus className="w-4 h-4 mr-1.5" /> Nouvelle réception</Button>
+        </div>
       </div>
 
       {deliveries.length === 0 ? (
         <div className="bg-slate-800/50 border border-dashed border-slate-600 rounded-xl px-4 py-8 text-center text-slate-400">
-          Aucune réception. Cliquez sur <span className="text-slate-200">Nouvelle réception</span> pour enregistrer une livraison.
+          Aucune réception. <span className="text-slate-200">Importer PDF</span> pour extraire un bon de livraison, ou <span className="text-slate-200">Nouvelle réception</span> pour une saisie manuelle.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-5">
