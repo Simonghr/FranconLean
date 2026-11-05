@@ -32,6 +32,31 @@ function readFileAsBase64(file: File): Promise<string> {
   })
 }
 
+// Lazy-load Tesseract.js from a CDN only when a photo is imported — keeps it
+// out of the bundle and off every other page. Free, runs in the browser.
+let tesseractPromise: Promise<any> | null = null
+function loadTesseract(): Promise<any> {
+  if (typeof window !== "undefined" && (window as any).Tesseract) return Promise.resolve((window as any).Tesseract)
+  if (!tesseractPromise) {
+    tesseractPromise = new Promise((resolve, reject) => {
+      const s = document.createElement("script")
+      s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"
+      s.onload = () => resolve((window as any).Tesseract)
+      s.onerror = () => { tesseractPromise = null; reject(new Error("Chargement de l'OCR impossible")) }
+      document.head.appendChild(s)
+    })
+  }
+  return tesseractPromise
+}
+
+async function ocrImage(file: File, onProgress?: (p: number) => void): Promise<string> {
+  const T = await loadTesseract()
+  const { data } = await T.recognize(file, "fra", {
+    logger: (m: any) => { if (m.status === "recognizing text" && onProgress) onProgress(m.progress ?? 0) },
+  })
+  return String(data?.text ?? "")
+}
+
 type ParsedLine = { raw_label: string; raw_ref: string | null; raw_qty: number | null }
 
 // Best-effort extraction of a delivery note / invoice from its raw text.
@@ -86,6 +111,7 @@ export default function ReceptionPage() {
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [validating, setValidating] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [importMsg, setImportMsg] = useState<string>("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const productById = useMemo(() => {
@@ -144,18 +170,32 @@ export default function ReceptionPage() {
     } catch (e: any) { console.error(e); window.alert(`Erreur : ${e?.message ?? e}`) }
   }
 
-  // Import a delivery note (PDF) → extract text server-side (no AI, free) →
-  // pre-fill a draft delivery with header + candidate lines to correct.
-  const importPdf = async (file: File) => {
+  // Import a delivery note → extract its text, then pre-fill a draft delivery
+  // with header + candidate lines to correct. PDFs are read server-side
+  // (extract-delivery edge function); photos are read by in-browser OCR.
+  // Both are free and use no AI.
+  const importFile = async (file: File) => {
+    const isImage = file.type.startsWith("image/") || /\.(jpe?g|png|webp|heic|heif|bmp|gif)$/i.test(file.name)
+    const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name)
+    if (!isImage && !isPdf) { window.alert("Format non pris en charge. Importez un PDF ou une photo."); return }
+
     setImporting(true)
+    setImportMsg(isImage ? "Lecture de la photo (OCR)…" : "Lecture du PDF…")
     try {
-      const dataUrl = await readFileAsBase64(file)
-      const { data, error } = await supabase.functions.invoke("extract-delivery", { body: { pdf_base64: dataUrl } })
-      if (error) throw error
-      if (!data?.ok) throw new Error(data?.error || "Extraction du PDF impossible.")
+      let text = ""
+      if (isPdf) {
+        const dataUrl = await readFileAsBase64(file)
+        const { data, error } = await supabase.functions.invoke("extract-delivery", { body: { pdf_base64: dataUrl } })
+        if (error) throw error
+        if (!data?.ok) throw new Error(data?.error || "Extraction du PDF impossible.")
+        text = String(data.text ?? "")
+      } else {
+        text = await ocrImage(file, p => setImportMsg(`Lecture de la photo (OCR)… ${Math.round(p * 100)}%`))
+      }
+
       const suppliers = [...new Set(products.map(p => p.supplier).filter(Boolean))] as string[]
-      const parsed = parseInvoice(String(data.text ?? ""), suppliers)
-      if (parsed.lines.length === 0) throw new Error("Aucune ligne détectée dans ce PDF. Saisie manuelle possible.")
+      const parsed = parseInvoice(text, suppliers)
+      if (parsed.lines.length === 0) throw new Error("Aucune ligne détectée. Vous pouvez saisir la réception à la main.")
 
       const today = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Paris" })
       const d = await deliveriesRepo.create({
@@ -190,6 +230,7 @@ export default function ReceptionPage() {
       window.alert(`Import impossible : ${e?.message ?? e}`)
     } finally {
       setImporting(false)
+      setImportMsg("")
       if (fileInputRef.current) fileInputRef.current.value = ""
     }
   }
@@ -305,12 +346,12 @@ export default function ReceptionPage() {
           <input
             ref={fileInputRef}
             type="file"
-            accept="application/pdf,.pdf"
+            accept="application/pdf,.pdf,image/*"
             className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) void importPdf(f) }}
+            onChange={e => { const f = e.target.files?.[0]; if (f) void importFile(f) }}
           />
           <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing}>
-            <Upload className="w-4 h-4 mr-1.5" /> {importing ? "Import…" : "Importer PDF"}
+            <Upload className="w-4 h-4 mr-1.5" /> {importing ? (importMsg || "Import…") : "Importer PDF / photo"}
           </Button>
           <Button size="sm" onClick={newDelivery}><Plus className="w-4 h-4 mr-1.5" /> Nouvelle réception</Button>
         </div>
@@ -318,7 +359,7 @@ export default function ReceptionPage() {
 
       {deliveries.length === 0 ? (
         <div className="bg-slate-800/50 border border-dashed border-slate-600 rounded-xl px-4 py-8 text-center text-slate-400">
-          Aucune réception. <span className="text-slate-200">Importer PDF</span> pour extraire un bon de livraison, ou <span className="text-slate-200">Nouvelle réception</span> pour une saisie manuelle.
+          Aucune réception. <span className="text-slate-200">Importer PDF / photo</span> pour extraire un bon de livraison, ou <span className="text-slate-200">Nouvelle réception</span> pour une saisie manuelle.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-5">
